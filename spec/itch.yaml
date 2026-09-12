@@ -1,0 +1,80 @@
+# ITCH 5.0 message layouts — single source of truth.
+#
+# These are the messages as they appear INSIDE a MoldUDP64 envelope: the
+# message begins at its type byte, with no length prefix (Mold's per-message
+# u16 length field supplies that).
+#
+# Offsets and widths are in bytes, measured from the start of the message.
+# All multi-byte integers are big-endian, per the ITCH specification.
+#
+# Verified against Nasdaq TotalView-ITCH 5.0 and against the frozen golden
+# model in Orderbook-cpp/src/itchparser.cpp.
+
+byte_order: big
+
+# Longest message in the supported subset. RTL sizes its accumulation
+# register from this; do not hand-edit, gen.py recomputes it.
+max_message_length: 36
+
+messages:
+
+  add_order:
+    type_char: 'A'
+    length: 36
+    comment: Add Order - No MPID Attribution
+    fields:
+      - { name: message_type,    offset:  0, width: 1, type: char }
+      - { name: stock_locate,    offset:  1, width: 2, type: uint }
+      - { name: tracking_number, offset:  3, width: 2, type: uint }
+      - { name: timestamp,       offset:  5, width: 6, type: uint }
+      - { name: order_ref,       offset: 11, width: 8, type: uint }
+      - { name: side,            offset: 19, width: 1, type: char }  # 'B' or 'S'
+      - { name: shares,          offset: 20, width: 4, type: uint }
+      - { name: stock,           offset: 24, width: 8, type: ascii }
+      - { name: price,           offset: 32, width: 4, type: uint }
+
+  order_delete:
+    type_char: 'D'
+    length: 19
+    comment: Order Delete
+    fields:
+      - { name: message_type,    offset:  0, width: 1, type: char }
+      - { name: stock_locate,    offset:  1, width: 2, type: uint }
+      - { name: tracking_number, offset:  3, width: 2, type: uint }
+      - { name: timestamp,       offset:  5, width: 6, type: uint }
+      - { name: order_ref,       offset: 11, width: 8, type: uint }
+
+  order_replace:
+    type_char: 'U'
+    length: 35
+    comment: Order Replace. Carries no side - the side must be recovered by
+             looking up original_order_ref in the book.
+    fields:
+      - { name: message_type,        offset:  0, width: 1, type: char }
+      - { name: stock_locate,        offset:  1, width: 2, type: uint }
+      - { name: tracking_number,     offset:  3, width: 2, type: uint }
+      - { name: timestamp,           offset:  5, width: 6, type: uint }
+      - { name: original_order_ref,  offset: 11, width: 8, type: uint }
+      - { name: new_order_ref,       offset: 19, width: 8, type: uint }
+      - { name: shares,              offset: 27, width: 4, type: uint }
+      - { name: price,               offset: 31, width: 4, type: uint }
+
+  order_executed:
+    type_char: 'E'
+    length: 31
+    comment: Order Executed. The feed reports the fill; the book consumer
+             applies it. Nothing is matched locally.
+    fields:
+      - { name: message_type,    offset:  0, width: 1, type: char }
+      - { name: stock_locate,    offset:  1, width: 2, type: uint }
+      - { name: tracking_number, offset:  3, width: 2, type: uint }
+      - { name: timestamp,       offset:  5, width: 6, type: uint }
+      - { name: order_ref,       offset: 11, width: 8, type: uint }
+      - { name: executed_shares, offset: 19, width: 4, type: uint }
+      - { name: match_number,    offset: 23, width: 8, type: uint }
+
+# Side encoding on the wire, and the 1-bit encoding used internally by both
+# the RTL and the golden model (Side::Buy = 0, Side::Sell = 1).
+side_encoding:
+  buy:  { wire_char: 'B', internal: 0 }
+  sell: { wire_char: 'S', internal: 1 }

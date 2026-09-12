@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# C++ / CMake
+build/
+cmake-build-*/
+out/
+*.o
+*.obj
+*.exe
+*.ilk
+*.pdb
+
+# Simulation
+sim_build/
+*.vcd
+*.fst
+*.ghw
+results.xml
+dump.v
+
+# Xilinx ISE
+*.bit
+*.bgn
+*.bld
+*.drc
+*.ncd
+*.ngc
+*.ngd
+*.ngr
+*.pcf
+*.par
+*.ptwx
+*.twr
+*.twx
+*.unroutes
+*.ut
+*.xpi
+*.xst
+_ngo/
+_xmsgs/
+xst/
+iseconfig/
+xlnx_auto_*/
+
+# Vivado
+*.jou
+*.log
+.Xil/
+*.cache/
+*.hw/
+*.runs/
+*.sim/
+
+# Captured data (large; regenerate with the stimulus generator)
+*.pcap
+*.mold
+bench/results/
+
+# spec/generated/ is deliberately COMMITTED. It is the shared contract
+# between the RTL, the golden model, and the host tooling, and CI verifies
+# it is current with `python spec/gen.py --check`.

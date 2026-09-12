@@ -1,0 +1,38 @@
+# MoldUDP64 framing layout — single source of truth.
+#
+# A MoldUDP64 datagram is a 20-byte header followed by `message_count`
+# blocks, each of which is a u16 big-endian length followed by that many
+# payload bytes. Messages never span datagrams.
+#
+# Verified against Orderbook-cpp/src/moldudp64.cpp.
+
+byte_order: big
+
+header:
+  length: 20
+  fields:
+    - { name: session,       offset:  0, width: 10, type: ascii }
+    - { name: sequence,      offset: 10, width:  8, type: uint }
+    - { name: message_count, offset: 18, width:  2, type: uint }
+
+# Each message block inside the envelope is prefixed by its length.
+message_block:
+  length_field: { width: 2, type: uint }
+
+# Special message_count values. The golden model currently returns an empty
+# message list for both; the RTL de-framer must do exactly the same, and
+# must additionally NOT advance its expected sequence number on a heartbeat
+# beyond the single increment the header already implies.
+control_counts:
+  heartbeat:      0x0000
+  end_of_session: 0xFFFF
+
+# Sequence-gap detection. The de-framer tracks the next expected sequence
+# number; a header whose sequence exceeds it indicates dropped datagrams.
+# This is the entire reason MoldUDP64 exists and is surfaced in the
+# snapshot status word as mold_gap_seen.
+gap_detection:
+  enabled: true
+  # A sequence number lower than expected means a duplicate or a
+  # retransmission; it is ignored rather than treated as a gap.
+  ignore_retransmissions: true

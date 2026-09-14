@@ -99,14 +99,17 @@ MOLD_END_OF_SESSION = 0xFFFF
 # ---- Book snapshot ----
 
 SNAP_MAGIC = 0x4F42
-SNAP_VERSION = 1
+SNAP_VERSION = 2
 SNAP_HDR_LEN = 32
-SNAP_HDR_FMT = '>HBBIQIIIBBH'
+SNAP_HDR_FMT = '>HBBIQIIIBBBB'
 SNAP_LEVEL_LEN = 16
 SNAP_LEVEL_FMT = '>IIQ'
-SNAP_MAX_PER_SIDE = 32
-SNAP_TOTAL_LEN = 1056
-SNAP_HDR_FIELDS = ['magic', 'version', 'status', 'snap_seq', 'mold_seq', 'msg_index', 't_arrive', 't_commit', 'bid_count', 'ask_count', 'reserved']
+SNAP_MAX_PER_SIDE = 64
+SNAP_PACKETS_PER_MSG = 2
+SNAP_PACKET_LEN = 1056  # per-side UDP datagram; two per ITCH message
+SNAP_SIDE_ID_BIDS = 0
+SNAP_SIDE_ID_ASKS = 1
+SNAP_HDR_FIELDS = ['magic', 'version', 'status', 'snap_seq', 'mold_seq', 'msg_index', 't_arrive', 't_commit', 'bid_count', 'ask_count', 'side_id', 'reserved']
 SNAP_LEVEL_FIELDS = ['price', 'quantity', 'order_id']
 
 SNAP_STATUS_BITS = {

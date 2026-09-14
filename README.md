@@ -4,9 +4,7 @@ An FPGA order book engine that consumes NASDAQ ITCH 5.0 messages framed in
 MoldUDP64 over Ethernet, reconstructs a bounded order book in hardware, and
 streams book snapshots back to the host over UDP.
 
-Final-year ECE capstone, College of Engineering Kidangoor.
-Advaith Krishna S · Aishamol PT · Devanandan J · Fathima Neharin
-Guide: Prof. Syamesh KG
+A personal project by Devanandan J.
 
 ## What this is, precisely
 
@@ -15,7 +13,7 @@ outbound market data feed: it reports fills as `E` messages rather than
 expecting the receiver to match. Nothing is matched locally — doing so would
 double-count against the executions the feed already reports.
 
-Scope is deliberately bounded: four message types (`A`, `D`, `U`, `E`) and 32
+Scope is deliberately bounded: four message types (`A`, `D`, `U`, `E`) and 64
 resting orders per side.
 
 ## Layout
@@ -28,12 +26,18 @@ spec/        wire-format single source of truth + code generator
 rtl/         Verilog-2001 RTL
 tb/          cocotb testbenches and the scoreboard
 bench/       latency experiment harness and plotting
+formal/      SymbiYosys assertion harness for the book core
+golden/      C++ golden model (git submodule, pinned)
 docs/
 ```
 
-Still in their own repositories until migration: the C++ golden model
-(`../Orderbook-cpp`) and the host stimulus/listener tooling
-(`../moldudp-scapy`).
+The `golden/` directory is a git submodule pointing at
+<https://github.com/devanandanj/Orderbook-cpp>. Clone with
+`git clone --recursive` (or run `git submodule update --init --recursive`
+after a plain clone) to fetch it.
+
+The host stimulus/listener tooling (`../moldudp-scapy`) is not yet linked
+in as a submodule; do so when it stabilises.
 
 ## spec/ is the contract
 
@@ -62,19 +66,21 @@ the hand-written ones in the frozen golden model.
 | Decision | Choice | Why |
 |---|---|---|
 | RTL language | Verilog-2001 | The only choice that is simultaneously ISE/XST-, Vivado-, Icarus-, and Verilator-safe. cocotb makes the testbench Python, so SystemVerilog would buy nothing |
-| Order lookup | 64-wide parallel comparator in flops | At 32 orders per side, a one-cycle broadcast compare *is* the hardware advantage. BRAM's registered read would serialize exactly the thing that makes this fast |
+| Order lookup | 128-wide parallel comparator in flops | At 64 orders per side, a one-cycle broadcast compare *is* the hardware advantage. BRAM's registered read would serialize exactly the thing that makes this fast |
 | Throughput | Multi-cycle FSM, not one message per cycle | A 36-byte Add takes 36 cycles just to arrive on an 8-bit datapath, leaving ~30 cycles of slack. This removes the read/write hazard entirely |
-| Egress | Fixed-size 1056-byte big-endian UDP snapshot | UDP already supplies framing, length, and a checksum, so no SYNC word, no length field, no CRC. Fixed size means the serializer is a register file plus a byte counter |
+| Egress | Fixed-size 1056-byte big-endian UDP packet, one per side | Two packets per ITCH message keeps each packet under the 1472-byte unfragmented-UDP limit while doubling book capacity vs. a single combined snapshot. UDP already supplies framing, length, and a checksum, so no SYNC word, no length field, no CRC. Fixed size means the serializer is a register file plus a byte counter |
 | Trace | The snapshot bytes **are** the verification trace | The golden model emits the identical format, so the scoreboard is a byte diff |
 
 ## Verification
 
 Both the RTL and the golden model consume the same `.mold` binary stimulus
-files and emit the same snapshot byte format. The scoreboard is a byte diff
-with the hardware cycle counters (`t_arrive`, `t_commit`) masked out.
+files and emit the same snapshot byte format (a bid packet then an ask
+packet per ITCH message). The scoreboard is a byte diff with the hardware
+cycle counters (`t_arrive`, `t_commit`) masked out.
 
 cocotb + Icarus Verilog is the primary simulator; Verilator is the fast path
-for long randomised runs.
+for long randomised runs. SymbiYosys under `formal/` proves the book's
+safety and per-command functional properties -- see `formal/README.md`.
 
 
 ## License

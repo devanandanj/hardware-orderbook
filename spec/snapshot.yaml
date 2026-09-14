@@ -1,4 +1,4 @@
-# FPGA -> host book snapshot, carried as a UDP payload.
+# FPGA -> host book snapshot, carried as UDP payload(s).
 #
 # Fixed size, big-endian. Fixed size is deliberate: the RTL serializer
 # becomes a register file plus a byte counter with no variable-length state
@@ -9,16 +9,25 @@
 # uart-trace-decoder format needed all three because a raw UART byte stream
 # supplies none of them.)
 #
-# One snapshot is emitted per processed ITCH message. These bytes ARE the
-# verification trace: the golden model emits the identical format, and the
-# scoreboard is a byte diff.
+# One ITCH message produces a PAIR of packets: the bid-side packet and the
+# ask-side packet, distinguished by the side_id byte in the header. The
+# consumer pairs them by (mold_seq, msg_index).
+#
+# Splitting per side is the whole reason we can carry 64 orders per side
+# instead of 32. A single combined snapshot of 32 header + 2 * 64 * 16 =
+# 2080 bytes would exceed the 1472-byte unfragmented-UDP limit; split into
+# two packets, each is 32 + 64 * 16 = 1056 bytes and fits comfortably.
+#
+# These bytes ARE the verification trace: the golden model emits the
+# identical two-packet stream, and the scoreboard is a byte diff.
 
 byte_order: big
 
 magic: 0x4F42        # "OB"
-version: 1
+version: 2           # bumped from 1: side_id, per-side packet split
 
-max_orders_per_side: 32   # must equal MAX_ORDERS_PER_SIDE in the golden model
+max_orders_per_side: 64   # must equal MAX_ORDERS_PER_SIDE in the golden model
+packets_per_message: 2    # one per side; consumer pairs by (mold_seq, msg_index)
 
 header:
   length: 32
@@ -33,7 +42,8 @@ header:
     - { name: t_commit,   offset: 24, width: 4, type: uint }
     - { name: bid_count,  offset: 28, width: 1, type: uint }
     - { name: ask_count,  offset: 29, width: 1, type: uint }
-    - { name: reserved,   offset: 30, width: 2, type: uint }
+    - { name: side_id,    offset: 30, width: 1, type: uint }  # 0=bids, 1=asks (matches ITCH_SIDE_*)
+    - { name: reserved,   offset: 31, width: 1, type: uint }
 
 # One resting order. Field order matches snapshot_format.yaml from
 # moldudp-scapy so the existing StructUnpacker needs minimal change.
@@ -44,11 +54,14 @@ level:
     - { name: quantity,  offset:  4, width: 4, type: uint }
     - { name: order_id,  offset:  8, width: 8, type: uint }
 
-# Body layout: all 32 bid slots, then all 32 ask slots. Slots at or beyond
-# the corresponding count are zero-filled.
+# Body layout, per packet: MAX_ORDERS_PER_SIDE level slots for the side
+# named by header.side_id. Slots at or beyond that side's count are
+# zero-filled. Both bid_count and ask_count are present in EVERY packet
+# header so the consumer can tell whether a pair is complete before both
+# packets arrive.
 body:
-  - { name: bids, count_field: bid_count }
-  - { name: asks, count_field: ask_count }
+  per_packet:
+    - { name: levels, count_field_when_bids: bid_count, count_field_when_asks: ask_count }
 
 # Entries within a side are sorted ascending by order_id. This matches
 # Orderbook-cpp/include/trace.h::SortSide and makes the snapshot independent

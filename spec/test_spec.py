@@ -35,9 +35,11 @@ GENERATED = SPEC_DIR / "generated"
 sys.path.insert(0, str(GENERATED))
 import itch_defs as d  # noqa: E402
 
-# The golden model lives in its own repository until the migration happens.
+# The golden model is a git submodule under golden/. Override with
+# ORDERBOOK_CPP_DIR if you want to point the cross-check at a working copy
+# elsewhere (e.g. a WIP branch).
 MODEL_DIR = Path(
-    os.environ.get("ORDERBOOK_CPP_DIR", SPEC_DIR.parent.parent / "Orderbook-cpp")
+    os.environ.get("ORDERBOOK_CPP_DIR", SPEC_DIR.parent / "golden")
 )
 
 # Named constants in the golden model, and the generated value each must equal.
@@ -91,13 +93,20 @@ def test_struct_formats_match_declared_lengths() -> None:
     assert struct.calcsize(d.SNAP_LEVEL_FMT) == d.SNAP_LEVEL_LEN
 
 
-def test_snapshot_total_length() -> None:
-    expected = d.SNAP_HDR_LEN + 2 * d.SNAP_MAX_PER_SIDE * d.SNAP_LEVEL_LEN
-    assert d.SNAP_TOTAL_LEN == expected
+def test_snapshot_packet_length() -> None:
+    # A snapshot packet carries one side. MTU limits us to one PACKET per
+    # datagram, not one pair -- so this is the invariant that must hold.
+    expected = d.SNAP_HDR_LEN + d.SNAP_MAX_PER_SIDE * d.SNAP_LEVEL_LEN
+    assert d.SNAP_PACKET_LEN == expected
 
-    assert d.SNAP_TOTAL_LEN <= MAX_UNFRAGMENTED_UDP_PAYLOAD, (
-        f"snapshot payload is {d.SNAP_TOTAL_LEN} bytes and would fragment; "
+    assert d.SNAP_PACKET_LEN <= MAX_UNFRAGMENTED_UDP_PAYLOAD, (
+        f"snapshot packet is {d.SNAP_PACKET_LEN} bytes and would fragment; "
         f"reduce max_orders_per_side or shrink the level record"
+    )
+
+    assert d.SNAP_PACKETS_PER_MSG == 2, (
+        "the two-packet split is the whole reason we can go above 45 "
+        "orders per side; do not silently drop it"
     )
 
 

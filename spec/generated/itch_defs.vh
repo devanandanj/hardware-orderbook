@@ -131,11 +131,16 @@
 
 // ---- Book snapshot (FPGA -> host, UDP payload) ----
 `define SNAP_MAGIC 16'h4F42
-`define SNAP_VERSION 8'd1
+`define SNAP_VERSION 8'd2
 `define SNAP_HDR_LEN 32
 `define SNAP_LEVEL_LEN 16
-`define SNAP_MAX_PER_SIDE 32
-`define SNAP_TOTAL_LEN 1056
+`define SNAP_MAX_PER_SIDE 64
+`define SNAP_PACKETS_PER_MSG 2
+`define SNAP_PACKET_LEN 1056  // per-side UDP datagram; two per ITCH message
+
+// side_id values -- match the internal 1-bit Side encoding.
+`define SNAP_SIDE_ID_BIDS 8'd0
+`define SNAP_SIDE_ID_ASKS 8'd1
 `define SNAP_MAGIC_OFF 0
 `define SNAP_MAGIC_W 2
 `define SNAP_VERSION_OFF 2
@@ -156,8 +161,10 @@
 `define SNAP_BID_COUNT_W 1
 `define SNAP_ASK_COUNT_OFF 29
 `define SNAP_ASK_COUNT_W 1
-`define SNAP_RESERVED_OFF 30
-`define SNAP_RESERVED_W 2
+`define SNAP_SIDE_ID_OFF 30
+`define SNAP_SIDE_ID_W 1
+`define SNAP_RESERVED_OFF 31
+`define SNAP_RESERVED_W 1
 `define SNAP_LEVEL_PRICE_OFF 0
 `define SNAP_LEVEL_PRICE_W 4
 `define SNAP_LEVEL_QUANTITY_OFF 4

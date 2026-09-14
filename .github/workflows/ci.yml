@@ -1,0 +1,63 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  spec:
+    name: spec generator + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The golden model at golden/ is a submodule; the cross-check test
+          # needs its headers.
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Generated files are current
+        # Fails the build if anyone edited spec/*.yaml without regenerating,
+        # or edited spec/generated/* by hand. The whole point of the generator
+        # is that these two must never disagree.
+        run: python spec/gen.py --check
+
+      - name: Spec self-tests
+        # Includes the golden-model cross-check now that Orderbook-cpp is
+        # checked out as a submodule at golden/.
+        run: python spec/test_spec.py
+
+  # Enable once rtl/ exists. Leaving it wired-but-disabled keeps the workflow
+  # honest about what is and isn't verified in CI.
+  #
+  # rtl-sim:
+  #   name: cocotb regression (icarus)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with:
+  #         python-version: '3.11'
+  #     - run: sudo apt-get install -y iverilog
+  #     - run: pip install cocotb pyyaml
+  #     - run: make -C tb sim
+  #
+  # formal:
+  #   name: SymbiYosys book properties
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Install oss-cad-suite
+  #       run: |
+  #         curl -L -o oss-cad-suite.tgz \
+  #           https://github.com/YosysHQ/oss-cad-suite-build/releases/latest/download/oss-cad-suite-linux-x64.tgz
+  #         tar xzf oss-cad-suite.tgz
+  #         echo "$PWD/oss-cad-suite/bin" >> "$GITHUB_PATH"
+  #     - run: make -C formal prove

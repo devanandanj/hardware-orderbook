@@ -23,6 +23,11 @@ sim_build/
 results.xml
 dump.v
 
+# SymbiYosys output
+formal/book_bmc/
+formal/book_prove/
+formal/book_cover/
+
 # Xilinx ISE
 *.bit
 *.bgn

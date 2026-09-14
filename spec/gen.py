@@ -124,9 +124,15 @@ def validate(itch: dict, mold: dict, snap: dict) -> None:
             )
 
 
-def snapshot_total_length(snap: dict) -> int:
-    return (snap["header"]["length"]
-            + 2 * snap["max_orders_per_side"] * snap["level"]["length"])
+def snapshot_packet_length(snap: dict) -> int:
+    """Length of ONE snapshot packet (one side).
+
+    Each ITCH message emits `packets_per_message` such packets; the total
+    egress volume per message is packet_length * packets_per_message. The
+    MTU check in test_spec.py is against this per-packet length, since
+    each packet is its own UDP datagram.
+    """
+    return snap["header"]["length"] + snap["max_orders_per_side"] * snap["level"]["length"]
 
 
 def struct_format(fields: list[dict]) -> str:
@@ -233,7 +239,12 @@ def emit_verilog(itch: dict, mold: dict, snap: dict) -> str:
     add(f"`define SNAP_HDR_LEN {snap['header']['length']}\n")
     add(f"`define SNAP_LEVEL_LEN {snap['level']['length']}\n")
     add(f"`define SNAP_MAX_PER_SIDE {snap['max_orders_per_side']}\n")
-    add(f"`define SNAP_TOTAL_LEN {snapshot_total_length(snap)}\n")
+    add(f"`define SNAP_PACKETS_PER_MSG {snap['packets_per_message']}\n")
+    add(f"`define SNAP_PACKET_LEN {snapshot_packet_length(snap)}"
+        f"  // per-side UDP datagram; two per ITCH message\n")
+    add("\n// side_id values -- match the internal 1-bit Side encoding.\n")
+    add(f"`define SNAP_SIDE_ID_BIDS 8'd{itch['side_encoding']['buy']['internal']}\n")
+    add(f"`define SNAP_SIDE_ID_ASKS 8'd{itch['side_encoding']['sell']['internal']}\n")
     for field in snap["header"]["fields"]:
         fname = field["name"].upper()
         add(f"`define SNAP_{fname}_OFF {field['offset']}\n")
@@ -320,8 +331,15 @@ def emit_cpp(itch: dict, mold: dict, snap: dict) -> str:
         f"{snap['level']['length']};\n")
     add(f"inline constexpr std::size_t SNAP_MAX_PER_SIDE = "
         f"{snap['max_orders_per_side']};\n")
-    add(f"inline constexpr std::size_t SNAP_TOTAL_LEN = "
-        f"{snapshot_total_length(snap)};\n")
+    add(f"inline constexpr std::size_t SNAP_PACKETS_PER_MSG = "
+        f"{snap['packets_per_message']};\n")
+    add(f"inline constexpr std::size_t SNAP_PACKET_LEN = "
+        f"{snapshot_packet_length(snap)};"
+        f"  // per-side UDP datagram; two per ITCH message\n")
+    add(f"inline constexpr std::uint8_t SNAP_SIDE_ID_BIDS = "
+        f"{itch['side_encoding']['buy']['internal']};\n")
+    add(f"inline constexpr std::uint8_t SNAP_SIDE_ID_ASKS = "
+        f"{itch['side_encoding']['sell']['internal']};\n")
     for field in snap["header"]["fields"]:
         fname = field["name"].upper()
         add(f"inline constexpr std::size_t SNAP_{fname}_OFF = "
@@ -408,7 +426,11 @@ def emit_python(itch: dict, mold: dict, snap: dict) -> str:
     add(f"SNAP_LEVEL_LEN = {snap['level']['length']}\n")
     add(f"SNAP_LEVEL_FMT = {struct_format(snap['level']['fields'])!r}\n")
     add(f"SNAP_MAX_PER_SIDE = {snap['max_orders_per_side']}\n")
-    add(f"SNAP_TOTAL_LEN = {snapshot_total_length(snap)}\n")
+    add(f"SNAP_PACKETS_PER_MSG = {snap['packets_per_message']}\n")
+    add(f"SNAP_PACKET_LEN = {snapshot_packet_length(snap)}"
+        f"  # per-side UDP datagram; two per ITCH message\n")
+    add(f"SNAP_SIDE_ID_BIDS = {itch['side_encoding']['buy']['internal']}\n")
+    add(f"SNAP_SIDE_ID_ASKS = {itch['side_encoding']['sell']['internal']}\n")
     add("SNAP_HDR_FIELDS = "
         f"{[f['name'] for f in snap['header']['fields']]!r}\n")
     add("SNAP_LEVEL_FIELDS = "
@@ -472,9 +494,12 @@ def main() -> int:
         path.write_text(content, encoding="utf-8")
         print(f"wrote {path}")
 
-    print(f"\nsnapshot payload: {snapshot_total_length(snap)} bytes "
+    packet = snapshot_packet_length(snap)
+    print(f"\nsnapshot packet: {packet} bytes "
           f"({snap['header']['length']} header + "
-          f"2 x {snap['max_orders_per_side']} x {snap['level']['length']} levels)")
+          f"{snap['max_orders_per_side']} x {snap['level']['length']} levels), "
+          f"x {snap['packets_per_message']} per ITCH message "
+          f"= {packet * snap['packets_per_message']} bytes total egress")
     return 0
 
 

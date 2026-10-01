@@ -24,6 +24,7 @@ results.xml
 dump.v
 
 # SymbiYosys output
+formal/book/
 formal/book_bmc/
 formal/book_prove/
 formal/book_cover/

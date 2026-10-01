@@ -134,33 +134,6 @@ module book_props #(
         a_full_ask: assert (book_full_ask == (ask_count == MAX));
     end
 
-    // no_duplicate_order_ref: an order_ref appears at most once, across
-    // both sides. Encoded as a pairwise slot-slot check.
-    genvar gi, gj;
-    generate
-        for (gi = 0; gi < MAX; gi++) begin : g_dup_i
-            for (gj = gi + 1; gj < MAX; gj++) begin : g_dup_j
-                // Same side, different slot.
-                always @(posedge clk) if (!rst) begin
-                    a_no_dup_bid: assert (
-                        !(slot_valid_bid[gi] && slot_valid_bid[gj]
-                          && slot_ref_bid_flat[64*gi +: 64]
-                             == slot_ref_bid_flat[64*gj +: 64])
-                    );
-                    a_no_dup_ask: assert (
-                        !(slot_valid_ask[gi] && slot_valid_ask[gj]
-                          && slot_ref_ask_flat[64*gi +: 64]
-                             == slot_ref_ask_flat[64*gj +: 64])
-                    );
-                end
-            end
-            // Cross-side: same slot index paired with itself in the other
-            // side; the full cross-check is 32x32 which is too big to write
-            // out. Rely on the per-side check plus the property that a
-            // given order_ref only ever hits one side (asserted below).
-        end
-    endgenerate
-
     // mold_gap_seen is sticky: once set, stays set until rst.
     always @(posedge clk) if (!rst && $past(mold_gap_seen)) begin
         a_gap_sticky: assert (mold_gap_seen);

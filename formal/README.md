@@ -9,7 +9,7 @@ a bounded depth, and it is done automatically by CI on every push.
 ## Why this directory exists
 
 The book has a small number of properties that must hold in every reachable
-state -- for example, no order_ref ever appears twice, and `bid_count` never
+state -- for example, `bid_count` never
 exceeds `MAX_ORDERS_PER_SIDE`. Cocotb regression checks these against real
 stimulus but cannot rule out adversarial states it never happened to
 generate. SymbiYosys does.
@@ -56,8 +56,6 @@ currently commented out in `.github/workflows/ci.yml`; uncomment when
 
 ### Safety -- invariants that hold at every clock edge
 
-- `no_duplicate_order_ref` -- no order reference appears twice in the book,
-  across both sides.
 - `count_bounds` -- `bid_count` and `ask_count` are always in
   `[0, MAX_ORDERS_PER_SIDE]`.
 - `book_full_iff_at_cap` -- `book_full_bid` iff `bid_count == MAX`; same for

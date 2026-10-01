@@ -14,89 +14,92 @@ exceeds `MAX_ORDERS_PER_SIDE`. Cocotb regression checks these against real
 stimulus but cannot rule out adversarial states it never happened to
 generate. SymbiYosys does.
 
-This is also useful as a *design contract*. Everything here is written before
-the RTL is authored; the RTL then has to satisfy it. If a property is
-unprovable, either the property is wrong or the RTL is wrong -- fix whichever
-is wrong, do not weaken the property.
+If a property is unprovable, either the property is wrong or the RTL is
+wrong -- fix whichever is wrong, do not weaken the property.
 
 ## Approach
 
-- The DUT (`rtl/book.v` -- not yet written) stays pure Verilog-2001 so it
-  remains synthesisable in ISE/XST, Vivado, Icarus and Verilator. Assertions
-  live outside it.
-- `book_props.sv` is a SystemVerilog file that binds SVA properties to the
-  DUT's signals. SymbiYosys reads it via a `bind` directive so the DUT source
-  is not touched.
-- `book.sby` runs three tasks:
-  - `bmc` -- bounded model check to a depth that exhausts one round of every
-    ITCH command type.
-  - `prove` -- k-induction attempt for the invariant properties.
-  - `cover` -- coverage witnesses that prove the interesting states are
-    actually reachable (`book_full_bid`, `unknown_order_ref`, etc.), so a
-    property is not vacuously satisfied.
+- `rtl/book.v` stays pure Verilog-2001. The properties live in
+  `book_formal.sv`, a wrapper that instantiates `book` and asserts on its
+  outputs. (Not a `bind`: open-source Yosys does not support it.)
+- Every command input is a free top-level input, so the solver chooses the
+  stimulus. The only constraints are the feed guarantees listed under
+  "Assumptions" below.
+- Each functional property compares the book one cycle after a command with
+  the book one cycle before it, slot by slot.
+- Proofs run at `MAX = 4` per side (`chparam` in `book.sby`). The RTL is
+  identical at any size; a small book lets k-induction close in seconds.
+- `book.sby` tasks:
+  - `prove` -- k-induction. A PASS here is an unbounded proof: the
+    properties hold in every reachable state.
+  - `cover` -- witnesses that every interesting state is reachable, so no
+    property is vacuously true.
+  - `bmc` -- bounded check to depth 10, which covers filling a side and
+    evicting from it. Redundant once `prove` passes; useful for quick
+    counterexamples while editing.
 
 ## Running
 
-Install the oss-cad-suite bundle (has yosys + sby + all backends):
+Install the oss-cad-suite bundle (yosys + sby + solvers):
 <https://github.com/YosysHQ/oss-cad-suite-build/releases>
 
-Then:
-
 ```
-make prove         # runs all three tasks
-make bmc           # bounded check only
-make cover         # coverage witnesses only
+make prove         # unbounded proof (~30 s)
+make cover         # reachability witnesses
+make bmc           # bounded check (minutes)
 ```
 
-CI runs `make prove` on every push once the RTL exists. The CI job is
-currently commented out in `.github/workflows/ci.yml`; uncomment when
-`rtl/book.v` is committed.
+CI runs `make prove cover` on every push.
 
-## Properties (see `book_props.sv` for the SVA)
+## Properties (see `book_formal.sv`)
 
-### Safety -- invariants that hold at every clock edge
+### Safety -- every cycle
 
-- `count_bounds` -- `bid_count` and `ask_count` are always in
-  `[0, MAX_ORDERS_PER_SIDE]`.
-- `book_full_iff_at_cap` -- `book_full_bid` iff `bid_count == MAX`; same for
-  ask.
-- `unknown_ref_sticky_until_cleared` -- `unknown_order_ref` is a status of
-  the last command, not a running flag. Verify its precise semantics against
-  the yaml.
-- `mold_gap_sticky` -- once `mold_gap_seen` is set it stays set until reset.
+- Counts equal the number of occupied slots per side and never exceed `MAX`.
+- `book_full_*` is set iff that side is at `MAX`.
+- `cmd_ready` is always high (one command per cycle).
+- No order ref rests in two slots, across both sides. This is an induction
+  helper: unreachable from reset, but without it k-induction starts from a
+  state with a duplicate ref, where a `D` removes one copy and leaves the
+  other.
 
-### Functional correctness -- one-step effects of each command
+### Functional -- one-step effect of each command
 
-- `add_then_present` -- an accepted `A` command results in the order being
-  in the book at the next commit.
-- `delete_removes` -- a `D` command against a present order_ref removes it
-  and does not touch anything else.
-- `update_swaps` -- a `U` command against a present `original_order_ref`
-  removes it and inserts `new_order_ref` with the new shares/price on the
-  same side.
-- `execute_reduces` -- an `E` command reduces the target order's shares by
-  `executed_shares`. If the result is zero, the order is removed.
-- `unknown_ref_flagged` -- a `D`/`U`/`E` against a not-present order_ref
-  leaves the book unchanged and raises `unknown_order_ref` for that snapshot.
+- `A` -- lands on its side with its price and shares, unless the side was
+  full and its price does not strictly beat the worst resting order, in
+  which case it is dropped. An evicting add removes precisely the worst
+  order (lowest bid / highest ask; on a price tie, the highest ref).
+- `D` -- the order is gone.
+- `E` -- shares are reduced by `executed_shares`, or the order is removed
+  once `executed_shares >= shares`.
+- `U` -- the original is gone and the new ref rests on the original's side
+  with the new price and shares, whatever `cmd_side` says.
+- `unknown_order_ref` is set iff the last command was `D`/`E`/`U` and its
+  ref was not in the book.
+- `commit` pulses exactly one cycle after each accepted command.
+- `mold_gap_seen` is the sticky OR of every `mold_gap` pulse since reset.
 
-### Feed-layer
+### Frame -- nothing else changes
 
-- `heartbeat_no_effect` -- a MoldUDP64 header with `message_count == 0`
-  advances no state and emits no snapshot.
-- `eos_no_effect` -- same for `message_count == 0xFFFF`.
-- `retransmit_ignored` -- a sequence number less than `expected` is
-  silently discarded.
+- Every resting order that is not the command's target (nor the evicted
+  order) stays in the same slot with the same ref, price and shares. With no
+  command, that is every order.
+- Every order resting now was either already there or is the one the
+  command adds.
 
-### Coverage witnesses -- proves the properties aren't vacuously green
+### Coverage witnesses
 
-- `cover_add_to_cap` -- reach `book_full_bid`.
-- `cover_wraparound` -- reach a state where an Add, then a Delete of that
-  Add, returns the book to the pre-Add state.
-- `cover_gap` -- reach `mold_gap_seen`.
+Both sides full, evict, discard, partial execution, replace, unknown ref,
+gap seen, and an add-then-delete that empties the book.
 
-## Constraints on the environment
+## Assumptions
 
-Assumptions live in `book_props.sv` under `// -- assumptions --`. Keep the
-set minimal: only the ITCH invariants that a valid feed guarantees (e.g.
-`side` is always `B` or `S`, prices are non-zero). Do not assume anything
-about the book -- that is what we are proving.
+Only what a valid ITCH feed guarantees -- nothing about the book, which is
+what is being proved:
+
+- `cmd_type` is one of `A`, `D`, `E`, `U`.
+- An `A`'s order ref is not already in the book; neither is a `U`'s new ref.
+  (Refs are unique for the life of the feed.)
+
+The MoldUDP64 feed-layer properties (heartbeat, end-of-session,
+retransmission) belong to the de-framer, which is not written yet.

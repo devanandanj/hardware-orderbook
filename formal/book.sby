@@ -1,39 +1,26 @@
 [tasks]
-bmc      bmc
-prove    prove
-cover    cover
+bmc
+prove
+cover
 
 [options]
-bmc:     mode bmc
-bmc:     depth 40
-prove:   mode prove
-prove:   depth 20
-cover:   mode cover
-cover:   depth 60
+bmc:   mode bmc
+bmc:   depth 10
+prove: mode prove
+prove: depth 4
+cover: mode cover
+cover: depth 16
 
 [engines]
-# Boolector is the strongest solver for datapath-heavy proofs at this scale.
-# Fall back to yices/z3 if boolector is not on PATH.
-bmc:     smtbmc boolector
-prove:   smtbmc boolector
-cover:   smtbmc boolector
+smtbmc boolector
 
 [script]
-# Read the DUT (pure Verilog-2001) and the SystemVerilog assertion harness.
-read -formal -sv ../rtl/book.v
-read -formal -sv book_props.sv
-
-# Bind the assertion module onto every instance of `book`. This is the
-# canonical "no touching the DUT source" pattern.
-chformal -assert -assume -cover
-prep -top book
-
-# Attach the properties module.
-hierarchy -top book
-uniquify
-proc
-opt_clean
+read -formal book.v
+read -formal book_formal.sv
+# A small book: the RTL is the same at any size, and k-induction closes fast.
+chparam -set MAX 4 book_formal
+prep -top book_formal
 
 [files]
-book_props.sv
 ../rtl/book.v
+book_formal.sv

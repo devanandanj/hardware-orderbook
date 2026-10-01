@@ -1,9 +1,6 @@
 # Formal verification driver.
 #
-# Runs SymbiYosys on the SVA harness in book_props.sv, bound onto the DUT
-# in ../rtl/book.v. The DUT does not exist yet; `make prove` will fail with
-# a "file not found" until it does. That is intentional -- the properties
-# are the contract the RTL must satisfy.
+# Runs SymbiYosys on book_formal.sv, a wrapper around ../rtl/book.v.
 
 .PHONY: prove bmc cover clean
 

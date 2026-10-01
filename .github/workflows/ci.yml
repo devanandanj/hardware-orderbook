@@ -34,18 +34,10 @@ jobs:
         # checked out as a submodule at golden/.
         run: python spec/test_spec.py
 
-  # Enable once book_props.sv is actually attached to the DUT -- as written,
-  # nothing instantiates it, so sby would check zero properties.
-  #
-  # formal:
-  #   name: SymbiYosys book properties
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Install oss-cad-suite
-  #       run: |
-  #         curl -L -o oss-cad-suite.tgz \
-  #           https://github.com/YosysHQ/oss-cad-suite-build/releases/latest/download/oss-cad-suite-linux-x64.tgz
-  #         tar xzf oss-cad-suite.tgz
-  #         echo "$PWD/oss-cad-suite/bin" >> "$GITHUB_PATH"
-  #     - run: make -C formal prove
+  formal:
+    name: SymbiYosys book properties
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: YosysHQ/setup-oss-cad-suite@v4
+      - run: make -C formal prove cover

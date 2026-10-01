@@ -69,3 +69,4 @@ bench/results/
 # spec/generated/ is deliberately COMMITTED. It is the shared contract
 # between the RTL, the golden model, and the host tooling, and CI verifies
 # it is current with `python spec/gen.py --check`.
+tb/uvm/build/

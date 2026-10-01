@@ -24,7 +24,7 @@ spec/        wire-format single source of truth + code generator
   gen.py       emits Verilog / C++ / Python constants
   generated/   DO NOT EDIT -- regenerate with `python spec/gen.py`
 rtl/         Verilog-2001 RTL
-tb/          cocotb testbenches and the scoreboard
+tb/uvm/      UVM testbench (Vivado xsim), golden model linked via DPI-C
 bench/       latency experiment harness and plotting
 formal/      SymbiYosys assertion harness for the book core
 golden/      C++ golden model (git submodule, pinned)
@@ -65,7 +65,7 @@ the hand-written ones in the frozen golden model.
 
 | Decision | Choice | Why |
 |---|---|---|
-| RTL language | Verilog-2001 | The only choice that is simultaneously ISE/XST-, Vivado-, Icarus-, and Verilator-safe. cocotb makes the testbench Python, so SystemVerilog would buy nothing |
+| RTL language | Verilog-2001 | The only choice that is simultaneously ISE/XST-, Vivado-, Icarus-, and Verilator-safe. SystemVerilog lives in the testbench and assertions, where it earns its keep |
 | Order lookup | 128-wide parallel comparator in flops | At 64 orders per side, a one-cycle broadcast compare *is* the hardware advantage. BRAM's registered read would serialize exactly the thing that makes this fast |
 | Throughput | Multi-cycle FSM, not one message per cycle | A 36-byte Add takes 36 cycles just to arrive on an 8-bit datapath, leaving ~30 cycles of slack. This removes the read/write hazard entirely |
 | Egress | Fixed-size 1056-byte big-endian UDP packet, one per side | Two packets per ITCH message keeps each packet under the 1472-byte unfragmented-UDP limit while doubling book capacity vs. a single combined snapshot. UDP already supplies framing, length, and a checksum, so no SYNC word, no length field, no CRC. Fixed size means the serializer is a register file plus a byte counter |
@@ -78,9 +78,27 @@ files and emit the same snapshot byte format (a bid packet then an ask
 packet per ITCH message). The scoreboard is a byte diff with the hardware
 cycle counters (`t_arrive`, `t_commit`) masked out.
 
-cocotb + Icarus Verilog is the primary simulator; Verilator is the fast path
-for long randomised runs. SymbiYosys under `formal/` proves the book's
-safety and per-command functional properties -- see `formal/README.md`.
+The book core is verified with a UVM testbench in `tb/uvm/`, run on Vivado
+xsim:
+
+- **Agent**: driver, monitor and sequencer on `book_if`, one command per cycle.
+- **Scoreboard**: replays every observed command into the C++ golden model
+  through DPI-C and compares the full book after each commit, so the RTL is
+  checked against the same code as everything else, not a re-port.
+- **Sequences**: a directed full-book corner sequence (fill, tie/worse/better
+  adds, partial and over-fill executions, replace, unknown refs) and a
+  constrained-random A/D/E/U mix.
+- **Coverage**: command type x hit/miss, add outcome (insert/evict/discard)
+  x side, partial vs. full execution.
+- **SVA** in `book_if`: commit timing, count bounds, full flags, sticky gap.
+
+```bash
+tb/uvm/run.sh                      # book_random_test, seed 1
+tb/uvm/run.sh book_fill_test 42    # named test and seed
+```
+
+SymbiYosys under `formal/` proves the book's safety and per-command
+functional properties -- see `formal/README.md`.
 
 
 ## License

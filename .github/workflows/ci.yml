@@ -34,20 +34,8 @@ jobs:
         # checked out as a submodule at golden/.
         run: python spec/test_spec.py
 
-  # Enable once rtl/ exists. Leaving it wired-but-disabled keeps the workflow
-  # honest about what is and isn't verified in CI.
-  #
-  # rtl-sim:
-  #   name: cocotb regression (icarus)
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-python@v5
-  #       with:
-  #         python-version: '3.11'
-  #     - run: sudo apt-get install -y iverilog
-  #     - run: pip install cocotb pyyaml
-  #     - run: make -C tb sim
+  # Enable once book_props.sv is actually attached to the DUT -- as written,
+  # nothing instantiates it, so sby would check zero properties.
   #
   # formal:
   #   name: SymbiYosys book properties

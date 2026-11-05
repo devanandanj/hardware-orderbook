@@ -193,9 +193,7 @@ VERILOG_PREAMBLE = """\
 // {banner}
 //
 // Include this at FILE SCOPE, before your module. Everything here is a
-// `define rather than a localparam so the file works outside a module body
-// and stays legal in Verilog-2001 (required: Xilinx ISE/XST does not
-// synthesize SystemVerilog).
+// `define rather than a localparam so the file works outside a module body.
 //
 // Byte-vector convention
 // ----------------------

@@ -25,7 +25,7 @@ is in progress.
 |---|---|
 | `spec/`, `golden/` | v3 |
 | `ethernet/` | Done, simulation only; not yet connected to the book |
-| `rtl/order_table.sv` | In progress; test in `tb/order_table/` |
+| `rtl/order_table.sv` | Done, tested against golden in `tb/order_table/`; timing not yet checked |
 | Price book, book FSM, Mold/ITCH ingress, snapshot egress | Not started |
 | `rtl/book.sv` | v2 core (64 orders per side, full-depth snapshots), to be replaced |
 | `formal/` | Proves the v2 core |
@@ -83,7 +83,7 @@ the hand-written ones in the golden model.
 
 | Decision | Choice | Why |
 |---|---|---|
-| RTL language | SystemVerilog, restricted subset | Matches the Ethernet front end, the testbench and the assertions. Vivado, Verilator and Yosys are the targets; ISE is not. Yosys limits the subset: memories stay plain vectors (it silently drops an array of structs), packed structs are assigned directly rather than cast, package names are qualified rather than wildcard-imported, and functions assign to their name instead of using `return` |
+| RTL language | SystemVerilog, restricted subset | Matches the Ethernet front end, the testbench and the assertions. Vivado, Verilator and Yosys are the targets; ISE is not. Yosys limits the subset: memories stay plain vectors (it silently drops an array of structs), packed structs are assigned directly rather than cast, package names are qualified rather than wildcard-imported, functions assign to their name instead of using `return`, packed arrays stay one-dimensional, and structs stay out of generate blocks and function arguments |
 | Order lookup | Set-associative hash table in BRAM, plus a small flop CAM | Thousands of resting orders rule out a parallel compare over every order. One BRAM bank per way reads a whole set in a cycle, and the CAM catches set overflow. The golden model mirrors the placement bit-exactly, so an order dropped in one is dropped in the other |
 | Throughput | Multi-cycle FSM, not one message per cycle | The shortest book message, `D`, takes about 21 cycles to arrive on an 8-bit datapath including its length prefix, which leaves room for several memory accesses per message |
 | Egress | Fixed-size 48-byte big-endian UDP packet, one per book message | Full depth no longer fits on the wire at this book size, so the packet carries the best bid and offer. UDP already supplies framing, length, and a checksum, so no SYNC word, no length field, no CRC. Fixed size means the serializer is a register file plus a byte counter |

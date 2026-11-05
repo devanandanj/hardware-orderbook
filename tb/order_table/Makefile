@@ -15,7 +15,7 @@ run: build/Vorder_table
 	./build/Vorder_table $(SEED) $(ROUNDS)
 
 build/Vorder_table: tb.cpp $(PKG) $(RTL) $(ROOT)/golden/src/ordertable.cpp
-	verilator --cc --exe --build -j 0 -O2 -Wno-fatal --Mdir build \
+	verilator --cc --exe --build -j 1 -O2 -Wno-fatal --Mdir build \
 	    --top-module order_table -I$(ROOT)/rtl -I$(ROOT)/spec/generated \
 	    -CFLAGS "-std=c++20 -I$(ROOT)/golden/include" \
 	    $(RTL) $(abspath tb.cpp) $(ROOT)/golden/src/ordertable.cpp

@@ -1,5 +1,7 @@
 # Formal verification of the book core
 
+This covers the v2 core in `rtl/book.sv`. The v3 blocks need their own harnesses.
+
 This directory proves properties about the RTL book with
 [SymbiYosys](https://symbiyosys.readthedocs.io/) driving Yosys and the built-in
 model checkers. Formal verification of the invariants stated below is a
@@ -10,7 +12,7 @@ a bounded depth, and it is done automatically by CI on every push.
 
 The book has a small number of properties that must hold in every reachable
 state -- for example, `bid_count` never
-exceeds `MAX_ORDERS_PER_SIDE`. Cocotb regression checks these against real
+exceeds `MAX_ORDERS_PER_SIDE`. The UVM regression checks these against real
 stimulus but cannot rule out adversarial states it never happened to
 generate. SymbiYosys does.
 

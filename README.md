@@ -11,29 +11,48 @@ outbound market data feed: it reports fills as `E` messages rather than
 expecting the receiver to match. Nothing is matched locally — doing so would
 double-count against the executions the feed already reports.
 
-Scope is deliberately bounded: four message types (`A`, `D`, `U`, `E`) and 64
-resting orders per side.
+Scope is deliberately bounded: one selected symbol, seven message types (`A`,
+`F`, `E`, `C`, `X`, `D`, `U`), and the geometry in `spec/book.yaml`: a hashed
+order table of 1024 sets x 3 ways plus a 16-entry overflow CAM, and 16384 price
+levels per side. Host output is the best bid and offer, not full depth.
+
+## Status
+
+This describes the v3 design. The spec and golden model implement it; the RTL
+is in progress.
+
+| Block | State |
+|---|---|
+| `spec/`, `golden/` | v3 |
+| `ethernet/` | Done, simulation only; not yet connected to the book |
+| `rtl/order_table.sv` | In progress; test in `tb/order_table/` |
+| Price book, book FSM, Mold/ITCH ingress, snapshot egress | Not started |
+| `rtl/book.sv` | v2 core (64 orders per side, full-depth snapshots), to be replaced |
+| `formal/` | Proves the v2 core |
+| `tb/uvm/` | Written for the v2 core; does not build against the v3 golden model |
 
 ## Layout
 
 ```
 spec/        wire-format single source of truth + code generator
-  *.yaml       ITCH, MoldUDP64, and book-snapshot layouts
+  *.yaml       ITCH, MoldUDP64, book-snapshot layouts, and book geometry
   gen.py       emits Verilog / C++ / Python constants
   generated/   DO NOT EDIT -- regenerate with `python spec/gen.py`
-rtl/         SystemVerilog RTL (book.sv is the v2 core, pending replacement)
+rtl/         SystemVerilog RTL
+tb/order_table/  Verilator test of the order table against the golden model
 tb/uvm/      UVM testbench (Vivado xsim), golden model linked via DPI-C
-bench/       latency experiment harness and plotting
 formal/      SymbiYosys assertion harness for the book core
 golden/      C++ golden model (git submodule, pinned)
 ethernet/    GMII to UDP payload front end and MAC TX (git submodule, pinned)
-docs/
 ```
 
-The `golden/` directory is a git submodule pointing at
-<https://github.com/devanandanj/Orderbook-cpp>. Clone with
+`golden/` and `ethernet/` are git submodules pointing at
+<https://github.com/devanandanj/Orderbook-cpp> and
+<https://github.com/devanandanj/low-latency-1g-ethernet>. Clone with
 `git clone --recursive` (or run `git submodule update --init --recursive`
-after a plain clone) to fetch it.
+after a plain clone) to fetch them.
+
+Python tooling needs `pip install -r requirements.txt`.
 
 The host stimulus/listener tooling (`../moldudp-scapy`) is not yet linked
 in as a submodule; do so when it stabilises.
@@ -58,27 +77,36 @@ python spec/test_spec.py      # validate, and cross-check against the golden mod
 and sum to its declared length, so a mistyped offset fails at generation time
 rather than as a scoreboard mismatch hundreds of messages into a run.
 `test_spec.py` additionally verifies that the generated constants agree with
-the hand-written ones in the frozen golden model.
+the hand-written ones in the golden model.
 
 ## Key design decisions
 
 | Decision | Choice | Why |
 |---|---|---|
 | RTL language | SystemVerilog, restricted subset | Matches the Ethernet front end, the testbench and the assertions. Vivado, Verilator and Yosys are the targets; ISE is not. Yosys limits the subset: memories stay plain vectors (it silently drops an array of structs), packed structs are assigned directly rather than cast, package names are qualified rather than wildcard-imported, and functions assign to their name instead of using `return` |
-| Order lookup | 128-wide parallel comparator in flops | At 64 orders per side, a one-cycle broadcast compare *is* the hardware advantage. BRAM's registered read would serialize exactly the thing that makes this fast |
-| Throughput | Multi-cycle FSM, not one message per cycle | A 36-byte Add takes 36 cycles just to arrive on an 8-bit datapath, leaving ~30 cycles of slack. This removes the read/write hazard entirely |
-| Egress | Fixed-size 1056-byte big-endian UDP packet, one per side | Two packets per ITCH message keeps each packet under the 1472-byte unfragmented-UDP limit while doubling book capacity vs. a single combined snapshot. UDP already supplies framing, length, and a checksum, so no SYNC word, no length field, no CRC. Fixed size means the serializer is a register file plus a byte counter |
+| Order lookup | Set-associative hash table in BRAM, plus a small flop CAM | Thousands of resting orders rule out a parallel compare over every order. One BRAM bank per way reads a whole set in a cycle, and the CAM catches set overflow. The golden model mirrors the placement bit-exactly, so an order dropped in one is dropped in the other |
+| Throughput | Multi-cycle FSM, not one message per cycle | The shortest book message, `D`, takes about 21 cycles to arrive on an 8-bit datapath including its length prefix, which leaves room for several memory accesses per message |
+| Egress | Fixed-size 48-byte big-endian UDP packet, one per book message | Full depth no longer fits on the wire at this book size, so the packet carries the best bid and offer. UDP already supplies framing, length, and a checksum, so no SYNC word, no length field, no CRC. Fixed size means the serializer is a register file plus a byte counter |
 | Trace | The snapshot bytes **are** the verification trace | The golden model emits the identical format, so the scoreboard is a byte diff |
 
 ## Verification
 
-Both the RTL and the golden model consume the same `.mold` binary stimulus
-files and emit the same snapshot byte format (a bid packet then an ask
-packet per ITCH message). The scoreboard is a byte diff with the hardware
-cycle counters (`t_arrive`, `t_commit`) masked out.
+The plan is for the RTL and the golden model to consume the same `.mold`
+binary stimulus files and emit the same snapshot packets, one per book message.
+The scoreboard is a byte diff with the hardware cycle counters (`t_arrive`,
+`t_commit`) masked out. Deep-book state, which the wire no longer carries, is
+compared memory by memory in simulation.
 
-The book core is verified with a UVM testbench in `tb/uvm/`, run on Vivado
-xsim:
+The order table is checked against the golden model's lookup code with
+Verilator, using directed corner cases and random traffic:
+
+```bash
+make -C tb/order_table                  # seed 1
+make -C tb/order_table SEED=7 ROUNDS=200
+```
+
+The v2 book core was verified with a UVM testbench in `tb/uvm/`, run on Vivado
+xsim. It needs porting to the v3 golden model before it builds again:
 
 - **Agent**: driver, monitor and sequencer on `book_if`, one command per cycle.
 - **Scoreboard**: replays every observed command into the C++ golden model
@@ -96,7 +124,7 @@ tb/uvm/run.sh                      # book_random_test, seed 1
 tb/uvm/run.sh book_fill_test 42    # named test and seed
 ```
 
-SymbiYosys under `formal/` proves the book's safety and per-command
+SymbiYosys under `formal/` proves the v2 book's safety and per-command
 functional properties -- see `formal/README.md`.
 
 

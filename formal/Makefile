@@ -1,6 +1,6 @@
 # Formal verification driver.
 #
-# Runs SymbiYosys on book_formal.sv, a wrapper around ../rtl/book.v.
+# Runs SymbiYosys on book_formal.sv, a wrapper around ../rtl/book.sv.
 
 .PHONY: prove bmc cover clean
 

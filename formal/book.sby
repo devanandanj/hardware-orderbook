@@ -15,12 +15,12 @@ cover: depth 16
 smtbmc boolector
 
 [script]
-read -formal book.v
+read -formal book.sv
 read -formal book_formal.sv
 # A small book: the RTL is the same at any size, and k-induction closes fast.
 chparam -set MAX 4 book_formal
 prep -top book_formal
 
 [files]
-../rtl/book.v
+../rtl/book.sv
 book_formal.sv

@@ -1,4 +1,4 @@
-// book_if.sv -- pin-level interface to rtl/book.v, plus protocol assertions
+// book_if.sv -- pin-level interface to rtl/book.sv, plus protocol assertions
 // that hold on every cycle of every test.
 
 `include "book_defs.svh"

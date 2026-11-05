@@ -33,7 +33,7 @@ fi
     ../golden_dpi.cpp ../$ROOT/golden/src/orderbook.cpp
 
 xvlog$ext -sv -L uvm -i .. \
-    ../$ROOT/rtl/book.v \
+    ../$ROOT/rtl/book.sv \
     ../book_if.sv ../book_pkg.sv ../tb_top.sv
 
 xelab$ext -L uvm -sv_root . -sv_lib golden_dpi -timescale 1ns/1ps tb_top \

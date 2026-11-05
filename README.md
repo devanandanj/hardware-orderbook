@@ -21,11 +21,12 @@ spec/        wire-format single source of truth + code generator
   *.yaml       ITCH, MoldUDP64, and book-snapshot layouts
   gen.py       emits Verilog / C++ / Python constants
   generated/   DO NOT EDIT -- regenerate with `python spec/gen.py`
-rtl/         Verilog-2001 RTL
+rtl/         SystemVerilog RTL (book.sv is the v2 core, pending replacement)
 tb/uvm/      UVM testbench (Vivado xsim), golden model linked via DPI-C
 bench/       latency experiment harness and plotting
 formal/      SymbiYosys assertion harness for the book core
 golden/      C++ golden model (git submodule, pinned)
+ethernet/    GMII to UDP payload front end and MAC TX (git submodule, pinned)
 docs/
 ```
 
@@ -63,7 +64,7 @@ the hand-written ones in the frozen golden model.
 
 | Decision | Choice | Why |
 |---|---|---|
-| RTL language | Verilog-2001 | The only choice that is simultaneously ISE/XST-, Vivado-, Icarus-, and Verilator-safe. SystemVerilog lives in the testbench and assertions, where it earns its keep |
+| RTL language | SystemVerilog, restricted subset | Matches the Ethernet front end, the testbench and the assertions. Vivado, Verilator and Yosys are the targets; ISE is not. Yosys limits the subset: memories stay plain vectors (it silently drops an array of structs), packed structs are assigned directly rather than cast, package names are qualified rather than wildcard-imported, and functions assign to their name instead of using `return` |
 | Order lookup | 128-wide parallel comparator in flops | At 64 orders per side, a one-cycle broadcast compare *is* the hardware advantage. BRAM's registered read would serialize exactly the thing that makes this fast |
 | Throughput | Multi-cycle FSM, not one message per cycle | A 36-byte Add takes 36 cycles just to arrive on an 8-bit datapath, leaving ~30 cycles of slack. This removes the read/write hazard entirely |
 | Egress | Fixed-size 1056-byte big-endian UDP packet, one per side | Two packets per ITCH message keeps each packet under the 1472-byte unfragmented-UDP limit while doubling book capacity vs. a single combined snapshot. UDP already supplies framing, length, and a checksum, so no SYNC word, no length field, no CRC. Fixed size means the serializer is a register file plus a byte counter |

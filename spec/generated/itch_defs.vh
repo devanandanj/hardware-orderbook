@@ -35,7 +35,7 @@
                         buf[8*((off)+6) +: 8], buf[8*((off)+7) +: 8]}
 
 // ---- ITCH 5.0 ----
-`define ITCH_MAX_MSG_LEN 36
+`define ITCH_MAX_MSG_LEN 40
 
 // A - Add Order - No MPID Attribution
 `define ITCH_ADD_ORDER_TYPE 8'h41  // 'A'
@@ -58,6 +58,30 @@
 `define ITCH_ADD_ORDER_STOCK_W 8
 `define ITCH_ADD_ORDER_PRICE_OFF 32
 `define ITCH_ADD_ORDER_PRICE_W 4
+
+// F - Add Order - MPID Attribution. Same book effect as 'A'; the trailing attribution is ignored.
+`define ITCH_ADD_ORDER_MPID_TYPE 8'h46  // 'F'
+`define ITCH_ADD_ORDER_MPID_LEN 40
+`define ITCH_ADD_ORDER_MPID_MESSAGE_TYPE_OFF 0
+`define ITCH_ADD_ORDER_MPID_MESSAGE_TYPE_W 1
+`define ITCH_ADD_ORDER_MPID_STOCK_LOCATE_OFF 1
+`define ITCH_ADD_ORDER_MPID_STOCK_LOCATE_W 2
+`define ITCH_ADD_ORDER_MPID_TRACKING_NUMBER_OFF 3
+`define ITCH_ADD_ORDER_MPID_TRACKING_NUMBER_W 2
+`define ITCH_ADD_ORDER_MPID_TIMESTAMP_OFF 5
+`define ITCH_ADD_ORDER_MPID_TIMESTAMP_W 6
+`define ITCH_ADD_ORDER_MPID_ORDER_REF_OFF 11
+`define ITCH_ADD_ORDER_MPID_ORDER_REF_W 8
+`define ITCH_ADD_ORDER_MPID_SIDE_OFF 19
+`define ITCH_ADD_ORDER_MPID_SIDE_W 1
+`define ITCH_ADD_ORDER_MPID_SHARES_OFF 20
+`define ITCH_ADD_ORDER_MPID_SHARES_W 4
+`define ITCH_ADD_ORDER_MPID_STOCK_OFF 24
+`define ITCH_ADD_ORDER_MPID_STOCK_W 8
+`define ITCH_ADD_ORDER_MPID_PRICE_OFF 32
+`define ITCH_ADD_ORDER_MPID_PRICE_W 4
+`define ITCH_ADD_ORDER_MPID_ATTRIBUTION_OFF 36
+`define ITCH_ADD_ORDER_MPID_ATTRIBUTION_W 4
 
 // D - Order Delete
 `define ITCH_ORDER_DELETE_TYPE 8'h44  // 'D'
@@ -111,6 +135,44 @@
 `define ITCH_ORDER_EXECUTED_MATCH_NUMBER_OFF 23
 `define ITCH_ORDER_EXECUTED_MATCH_NUMBER_W 8
 
+// C - Order Executed With Price. execution_price is the trade price, not the resting order's price - the book ignores it and reduces the level the order is stored at.
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_TYPE 8'h43  // 'C'
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_LEN 36
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_MESSAGE_TYPE_OFF 0
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_MESSAGE_TYPE_W 1
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_STOCK_LOCATE_OFF 1
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_STOCK_LOCATE_W 2
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_TRACKING_NUMBER_OFF 3
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_TRACKING_NUMBER_W 2
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_TIMESTAMP_OFF 5
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_TIMESTAMP_W 6
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_ORDER_REF_OFF 11
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_ORDER_REF_W 8
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_EXECUTED_SHARES_OFF 19
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_EXECUTED_SHARES_W 4
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_MATCH_NUMBER_OFF 23
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_MATCH_NUMBER_W 8
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_PRINTABLE_OFF 31
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_PRINTABLE_W 1
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_EXECUTION_PRICE_OFF 32
+`define ITCH_ORDER_EXECUTED_WITH_PRICE_EXECUTION_PRICE_W 4
+
+// X - Order Cancel. Partial cancel - reduces shares; the order is removed only when no shares remain.
+`define ITCH_ORDER_CANCEL_TYPE 8'h58  // 'X'
+`define ITCH_ORDER_CANCEL_LEN 23
+`define ITCH_ORDER_CANCEL_MESSAGE_TYPE_OFF 0
+`define ITCH_ORDER_CANCEL_MESSAGE_TYPE_W 1
+`define ITCH_ORDER_CANCEL_STOCK_LOCATE_OFF 1
+`define ITCH_ORDER_CANCEL_STOCK_LOCATE_W 2
+`define ITCH_ORDER_CANCEL_TRACKING_NUMBER_OFF 3
+`define ITCH_ORDER_CANCEL_TRACKING_NUMBER_W 2
+`define ITCH_ORDER_CANCEL_TIMESTAMP_OFF 5
+`define ITCH_ORDER_CANCEL_TIMESTAMP_W 6
+`define ITCH_ORDER_CANCEL_ORDER_REF_OFF 11
+`define ITCH_ORDER_CANCEL_ORDER_REF_W 8
+`define ITCH_ORDER_CANCEL_CANCELLED_SHARES_OFF 19
+`define ITCH_ORDER_CANCEL_CANCELLED_SHARES_W 4
+
 // Side encoding: wire char in, 1-bit internal representation out.
 `define ITCH_SIDE_BUY_CHAR 8'h42  // 'B'
 `define ITCH_SIDE_SELL_CHAR 8'h53  // 'S'
@@ -131,16 +193,8 @@
 
 // ---- Book snapshot (FPGA -> host, UDP payload) ----
 `define SNAP_MAGIC 16'h4F42
-`define SNAP_VERSION 8'd2
-`define SNAP_HDR_LEN 32
-`define SNAP_LEVEL_LEN 16
-`define SNAP_MAX_PER_SIDE 64
-`define SNAP_PACKETS_PER_MSG 2
-`define SNAP_PACKET_LEN 1056  // per-side UDP datagram; two per ITCH message
-
-// side_id values -- match the internal 1-bit Side encoding.
-`define SNAP_SIDE_ID_BIDS 8'd0
-`define SNAP_SIDE_ID_ASKS 8'd1
+`define SNAP_VERSION 8'd3
+`define SNAP_PACKET_LEN 48  // one UDP datagram per ITCH message
 `define SNAP_MAGIC_OFF 0
 `define SNAP_MAGIC_W 2
 `define SNAP_VERSION_OFF 2
@@ -157,25 +211,36 @@
 `define SNAP_T_ARRIVE_W 4
 `define SNAP_T_COMMIT_OFF 24
 `define SNAP_T_COMMIT_W 4
-`define SNAP_BID_COUNT_OFF 28
-`define SNAP_BID_COUNT_W 1
-`define SNAP_ASK_COUNT_OFF 29
-`define SNAP_ASK_COUNT_W 1
-`define SNAP_SIDE_ID_OFF 30
-`define SNAP_SIDE_ID_W 1
-`define SNAP_RESERVED_OFF 31
-`define SNAP_RESERVED_W 1
-`define SNAP_LEVEL_PRICE_OFF 0
-`define SNAP_LEVEL_PRICE_W 4
-`define SNAP_LEVEL_QUANTITY_OFF 4
-`define SNAP_LEVEL_QUANTITY_W 4
-`define SNAP_LEVEL_ORDER_ID_OFF 8
-`define SNAP_LEVEL_ORDER_ID_W 8
+`define SNAP_BID_PRICE_OFF 28
+`define SNAP_BID_PRICE_W 4
+`define SNAP_BID_SHARES_OFF 32
+`define SNAP_BID_SHARES_W 4
+`define SNAP_ASK_PRICE_OFF 36
+`define SNAP_ASK_PRICE_W 4
+`define SNAP_ASK_SHARES_OFF 40
+`define SNAP_ASK_SHARES_W 4
+`define SNAP_BID_ORDERS_OFF 44
+`define SNAP_BID_ORDERS_W 2
+`define SNAP_ASK_ORDERS_OFF 46
+`define SNAP_ASK_ORDERS_W 2
 
 // Snapshot status word bit positions.
-`define SNAP_STATUS_BOOK_FULL_BID 0  // bid side at capacity
-`define SNAP_STATUS_BOOK_FULL_ASK 1  // ask side at capacity
+`define SNAP_STATUS_ORDER_DROPPED 0  // add found its set and the CAM full; order not stored
+`define SNAP_STATUS_PRICE_REJECTED 1  // add price off-tick or outside the price window; order not stored
 `define SNAP_STATUS_MOLD_GAP_SEEN 2  // sticky; a MoldUDP64 sequence gap was observed
-`define SNAP_STATUS_UNKNOWN_ORDER_REF 3  // last D/U/E referenced an order not in the book
+`define SNAP_STATUS_UNKNOWN_ORDER_REF 3  // last D/U/E/C/X referenced an order not in the book
+
+// ---- Order book geometry ----
+`define BOOK_HASH_W 10
+`define BOOK_SETS 1024
+`define BOOK_WAYS 3
+`define BOOK_CAM_DEPTH 16
+`define BOOK_ENTRY_W 112
+`define BOOK_PRICE_TICK 100
+`define BOOK_SLOT_W 14
+`define BOOK_SLOTS 16384
+`define BOOK_SLOT_CENTER 8192
+`define BOOK_LEVEL_SHARES_W 32
+`define BOOK_LEVEL_ORDERS_W 16
 
 `endif // ITCH_DEFS_VH

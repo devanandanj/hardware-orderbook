@@ -23,6 +23,7 @@ order_table:
   # Insert placement: lowest-numbered empty way of the set, else the
   # lowest-numbered free CAM entry, else the order is DROPPED (status bit
   # order_dropped). Remove clears the entry's valid bit; nothing moves.
+  # Packed MSB first in the order listed below.
   entry:
     - { name: valid,  width: 1 }
     - { name: orn,    width: 64 }

@@ -45,7 +45,7 @@ class book_driver extends uvm_driver #(book_txn);
             vif.drv_cb.cmd_price         <= req.price;
             vif.drv_cb.cmd_exec_shares   <= req.exe;
             vif.drv_cb.mold_gap          <= req.gap;
-            // book.v is always ready; waiting on cmd_ready keeps the driver
+            // book.sv is always ready; waiting on cmd_ready keeps the driver
             // correct if that ever changes.
             do @(vif.drv_cb); while (!vif.drv_cb.cmd_ready);
             seq_item_port.item_done();

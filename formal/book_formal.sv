@@ -1,7 +1,7 @@
-// book_formal.sv -- formal harness for rtl/book.v.
+// book_formal.sv -- formal harness for rtl/book.sv.
 //
 // A wrapper rather than a `bind`: open-source Yosys has no bind, and a
-// wrapper keeps book.v untouched and pure Verilog-2001. Every command input
+// wrapper keeps book.sv untouched and synthesizable. Every command input
 // is a free top-level input, so the solver chooses the stimulus; the only
 // constraints are the feed guarantees under "assumptions".
 //
@@ -56,7 +56,7 @@ module book_formal #(
         .slot_qty_bid_flat(qb), .slot_qty_ask_flat(qa)
     );
 
-    // Both sides as one array, as in book.v: slot s is an ask iff s >= MAX.
+    // Both sides as one array, as in book.sv: slot s is an ask iff s >= MAX.
     wire [N-1:0]    v = {va, vb};
     wire [64*N-1:0] r = {ra, rb};
     wire [32*N-1:0] p = {pa, pb};

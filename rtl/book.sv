@@ -1,81 +1,58 @@
-// book.v -- ITCH book reconstruction core.
-//
-// Holds up to MAX resting orders per side and applies one decoded ITCH
-// command per cycle: a command accepted on cycle t is reflected in the
-// slot state, counts and status on cycle t+1, when `commit` pulses.
-// Semantics mirror golden/src/orderbook.cpp:
-//
-//   A  insert into a free slot; on a full side, overwrite the worst
-//      resting order if the incoming price is strictly better, else drop.
-//   D  free the slot holding order_ref.
-//   E  reduce shares; free the slot if executed >= resting.
-//   U  overwrite the original's slot with new ref/price/shares. The side
-//      is the original's -- U carries none -- and freeing then re-adding
-//      on the same side can never hit a full book, so in-place is exact.
-//
-// Order refs are assumed unique across the book (an ITCH feed guarantee).
-//
-// Storage is flops, both sides in one array: slot i is a bid for i < MAX,
-// an ask for i >= MAX. Every lookup is a 2*MAX-wide parallel compare.
-//
-// Pure Verilog-2001.
+/*
+ *
+ *
+ *
+ *
+ *
+ */
 
 `default_nettype none
 
 module book #(
-    parameter integer MAX = 64          // per side; power of two, <= 128
+    parameter int MAX = 64          // per side; power of two, <= 128
 ) (
-    input  wire                 clk,
-    input  wire                 rst,
+    input  logic              clk,
+    input  logic              rst,
 
-    input  wire                 cmd_valid,
-    output wire                 cmd_ready,
-    input  wire [7:0]           cmd_type,          // 'A','D','U','E'
-    input  wire                 cmd_side,          // A only: 0=buy, 1=sell
-    input  wire [63:0]          cmd_order_ref,     // A,D,E; U: original
-    input  wire [63:0]          cmd_new_order_ref, // U
-    input  wire [31:0]          cmd_shares,        // A,U
-    input  wire [31:0]          cmd_price,         // A,U
-    input  wire [31:0]          cmd_exec_shares,   // E
+    input  logic              cmd_valid,
+    output logic              cmd_ready,
+    input  logic [7:0]        cmd_type,              // 'A','D','U','E'
+    input  logic              cmd_side,              // A only: 0=buy, 1=sell
+    input  logic [63:0]       cmd_order_ref,         // A,D,E; U: original
+    input  logic [63:0]       cmd_new_order_ref,     // U
+    input  logic [31:0]       cmd_shares,            // A,U
+    input  logic [31:0]       cmd_price,             // A,U
+    input  logic [31:0]       cmd_exec_shares,       // E
 
-    input  wire                 mold_gap,          // pulse from the de-framer
+    input  logic              mold_gap,              // pulse from the de-framer
 
-    output reg                  commit,
-    output reg  [7:0]           bid_count,         // one byte, as in the snapshot
-    output reg  [7:0]           ask_count,
-    output wire                 book_full_bid,
-    output wire                 book_full_ask,
-    output reg                  unknown_order_ref,
-    output reg                  mold_gap_seen,
+    output logic              commit,
+    output logic [7:0]        bid_count,             // one byte, as in the snapshot
+    output logic [7:0]        ask_count,
+    output logic              book_full_bid,
+    output logic              book_full_ask,
+    output logic              unknown_order_ref,
+    output logic              mold_gap_seen,
 
-    output wire [MAX-1:0]       slot_valid_bid,
-    output wire [MAX-1:0]       slot_valid_ask,
-    output wire [64*MAX-1:0]    slot_ref_bid_flat,
-    output wire [64*MAX-1:0]    slot_ref_ask_flat,
-    output wire [32*MAX-1:0]    slot_price_bid_flat,
-    output wire [32*MAX-1:0]    slot_price_ask_flat,
-    output wire [32*MAX-1:0]    slot_qty_bid_flat,
-    output wire [32*MAX-1:0]    slot_qty_ask_flat
+    output logic [MAX-1:0]    slot_valid_bid,
+    output logic [MAX-1:0]    slot_valid_ask,
+    output logic [64*MAX-1:0] slot_ref_bid_flat,
+    output logic [64*MAX-1:0] slot_ref_ask_flat,
+    output logic [32*MAX-1:0] slot_price_bid_flat,
+    output logic [32*MAX-1:0] slot_price_ask_flat,
+    output logic [32*MAX-1:0] slot_qty_bid_flat,
+    output logic [32*MAX-1:0] slot_qty_ask_flat
 );
 
-    // $clog2 is Verilog-2005; XST-safe stand-in.
-    function integer clog2;
-        input integer v;
-        begin
-            clog2 = 0;
-            while ((1 << clog2) < v) clog2 = clog2 + 1;
-        end
-    endfunction
+    localparam int IW = $clog2(MAX);          // slot index within a side
+    localparam int N  = 2 * MAX;
 
-    localparam integer IW = clog2(MAX);       // slot index within a side
-    localparam integer N  = 2 * MAX;
+    localparam logic [7:0] T_ADD = 8'h41, T_DEL = 8'h44, T_EXE = 8'h45, T_REP = 8'h55;
 
-    localparam [7:0] T_ADD = 8'h41, T_DEL = 8'h44, T_EXE = 8'h45, T_REP = 8'h55;
-
-    reg [N-1:0] valid;
-    reg [63:0]  oref  [0:N-1];
-    reg [31:0]  price [0:N-1];
-    reg [31:0]  qty   [0:N-1];
+    logic [N-1:0] valid;
+    logic [63:0]  oref  [0:N-1];
+    logic [31:0]  price [0:N-1];
+    logic [31:0]  qty   [0:N-1];
 
     // Always ready: every command completes in one cycle.
     assign cmd_ready = 1'b1;
@@ -85,14 +62,13 @@ module book #(
     // Lowest index wins, so a bid hit beats an ask hit -- the same
     // search order as the golden model's FindOrder.
     // ---------------------------------------------------------------
-    reg [N-1:0]      hit_vec;
-    reg              hit;
-    reg [IW:0]       hit_idx;
-    integer i;
+    logic [N-1:0]    hit_vec;
+    logic            hit;
+    logic [IW:0]     hit_idx;
 
-    always @(*) begin
+    always_comb begin
         hit_idx = 0;
-        for (i = N - 1; i >= 0; i = i - 1) begin
+        for (int i = N - 1; i >= 0; i--) begin
             hit_vec[i] = valid[i] && (oref[i] == cmd_order_ref);
             if (hit_vec[i]) hit_idx = i;
         end
@@ -106,10 +82,10 @@ module book #(
     wire [MAX-1:0] side_valid = cmd_side ? valid[N-1:MAX] : valid[MAX-1:0];
     wire           side_full  = &side_valid;
 
-    reg [IW-1:0] free_idx;
-    always @(*) begin
+    logic [IW-1:0] free_idx;
+    always_comb begin
         free_idx = 0;
-        for (i = MAX - 1; i >= 0; i = i - 1)
+        for (int i = MAX - 1; i >= 0; i--)
             if (!side_valid[i]) free_idx = i;
     end
 
@@ -153,7 +129,7 @@ module book #(
     // ---------------------------------------------------------------
     // Apply.
     // ---------------------------------------------------------------
-    always @(posedge clk) begin
+    always_ff @(posedge clk) begin
         if (rst) begin
             valid             <= 0;
             commit            <= 1'b0;
@@ -193,10 +169,10 @@ module book #(
     // ---------------------------------------------------------------
     // Counts are popcounts of the valid bits, so they cannot drift.
     // ---------------------------------------------------------------
-    always @(*) begin
+    always_comb begin
         bid_count = 0;
         ask_count = 0;
-        for (i = 0; i < MAX; i = i + 1) begin
+        for (int i = 0; i < MAX; i++) begin
             bid_count = bid_count + valid[i];
             ask_count = ask_count + valid[MAX + i];
         end

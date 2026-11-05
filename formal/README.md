@@ -19,7 +19,7 @@ wrong -- fix whichever is wrong, do not weaken the property.
 
 ## Approach
 
-- `rtl/book.v` stays pure Verilog-2001. The properties live in
+- `rtl/book.sv` stays free of assertions. The properties live in
   `book_formal.sv`, a wrapper that instantiates `book` and asserts on its
   outputs. (Not a `bind`: open-source Yosys does not support it.)
 - Every command input is a free top-level input, so the solver chooses the

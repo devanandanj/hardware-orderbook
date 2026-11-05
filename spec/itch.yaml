@@ -14,7 +14,7 @@ byte_order: big
 
 # Longest message in the supported subset. RTL sizes its accumulation
 # register from this; do not hand-edit, gen.py recomputes it.
-max_message_length: 36
+max_message_length: 40
 
 messages:
 
@@ -32,6 +32,23 @@ messages:
       - { name: shares,          offset: 20, width: 4, type: uint }
       - { name: stock,           offset: 24, width: 8, type: ascii }
       - { name: price,           offset: 32, width: 4, type: uint }
+
+  add_order_mpid:
+    type_char: 'F'
+    length: 40
+    comment: Add Order - MPID Attribution. Same book effect as 'A'; the
+             trailing attribution is ignored.
+    fields:
+      - { name: message_type,    offset:  0, width: 1, type: char }
+      - { name: stock_locate,    offset:  1, width: 2, type: uint }
+      - { name: tracking_number, offset:  3, width: 2, type: uint }
+      - { name: timestamp,       offset:  5, width: 6, type: uint }
+      - { name: order_ref,       offset: 11, width: 8, type: uint }
+      - { name: side,            offset: 19, width: 1, type: char }  # 'B' or 'S'
+      - { name: shares,          offset: 20, width: 4, type: uint }
+      - { name: stock,           offset: 24, width: 8, type: ascii }
+      - { name: price,           offset: 32, width: 4, type: uint }
+      - { name: attribution,     offset: 36, width: 4, type: ascii }
 
   order_delete:
     type_char: 'D'
@@ -72,6 +89,36 @@ messages:
       - { name: order_ref,       offset: 11, width: 8, type: uint }
       - { name: executed_shares, offset: 19, width: 4, type: uint }
       - { name: match_number,    offset: 23, width: 8, type: uint }
+
+  order_executed_with_price:
+    type_char: 'C'
+    length: 36
+    comment: Order Executed With Price. execution_price is the trade price,
+             not the resting order's price - the book ignores it and reduces
+             the level the order is stored at.
+    fields:
+      - { name: message_type,    offset:  0, width: 1, type: char }
+      - { name: stock_locate,    offset:  1, width: 2, type: uint }
+      - { name: tracking_number, offset:  3, width: 2, type: uint }
+      - { name: timestamp,       offset:  5, width: 6, type: uint }
+      - { name: order_ref,       offset: 11, width: 8, type: uint }
+      - { name: executed_shares, offset: 19, width: 4, type: uint }
+      - { name: match_number,    offset: 23, width: 8, type: uint }
+      - { name: printable,       offset: 31, width: 1, type: char }  # 'Y' or 'N'
+      - { name: execution_price, offset: 32, width: 4, type: uint }
+
+  order_cancel:
+    type_char: 'X'
+    length: 23
+    comment: Order Cancel. Partial cancel - reduces shares; the order is
+             removed only when no shares remain.
+    fields:
+      - { name: message_type,     offset:  0, width: 1, type: char }
+      - { name: stock_locate,     offset:  1, width: 2, type: uint }
+      - { name: tracking_number,  offset:  3, width: 2, type: uint }
+      - { name: timestamp,        offset:  5, width: 6, type: uint }
+      - { name: order_ref,        offset: 11, width: 8, type: uint }
+      - { name: cancelled_shares, offset: 19, width: 4, type: uint }
 
 # Side encoding on the wire, and the 1-bit encoding used internally by both
 # the RTL and the golden model (Side::Buy = 0, Side::Sell = 1).

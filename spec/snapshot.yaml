@@ -1,4 +1,4 @@
-# FPGA -> host book snapshot, carried as UDP payload(s).
+# FPGA -> host book snapshot, carried as UDP payload.
 #
 # Fixed size, big-endian. Fixed size is deliberate: the RTL serializer
 # becomes a register file plus a byte counter with no variable-length state
@@ -9,28 +9,27 @@
 # uart-trace-decoder format needed all three because a raw UART byte stream
 # supplies none of them.)
 #
-# One ITCH message produces a PAIR of packets: the bid-side packet and the
-# ask-side packet, distinguished by the side_id byte in the header. The
-# consumer pairs them by (mold_seq, msg_index).
+# Version 3: ONE packet per BOOK message carrying the best bid and offer.
+# Book messages are types A F E C X D U for the selected symbol (stock
+# locate). Every other message -- other types, other symbols -- produces
+# NO packet. msg_index still counts every ITCH message in the stream, so
+# skipped messages show as gaps in msg_index.
 #
-# Splitting per side is the whole reason we can carry 64 orders per side
-# instead of 32. A single combined snapshot of 32 header + 2 * 64 * 16 =
-# 2080 bytes would exceed the 1472-byte unfragmented-UDP limit; split into
-# two packets, each is 32 + 64 * 16 = 1056 bytes and fits comfortably.
+# The book now holds thousands of orders, so per-message full depth no
+# longer fits on the wire; deep-book correctness is checked in simulation
+# by comparing the RTL's book memories against the golden model, and the
+# wire carries only what the host and the strategy consume.
 #
-# These bytes ARE the verification trace: the golden model emits the
-# identical two-packet stream, and the scoreboard is a byte diff.
+# These bytes are still a verification trace: the golden model emits the
+# identical packet stream, and the scoreboard byte-diffs it.
 
 byte_order: big
 
 magic: 0x4F42        # "OB"
-version: 2           # bumped from 1: side_id, per-side packet split
+version: 3           # 3: one BBO packet per message (2: per-side full depth)
 
-max_orders_per_side: 64   # must equal MAX_ORDERS_PER_SIDE in the golden model
-packets_per_message: 2    # one per side; consumer pairs by (mold_seq, msg_index)
-
-header:
-  length: 32
+packet:
+  length: 48
   fields:
     - { name: magic,      offset:  0, width: 2, type: uint }
     - { name: version,    offset:  2, width: 1, type: uint }
@@ -40,40 +39,20 @@ header:
     - { name: msg_index,  offset: 16, width: 4, type: uint }
     - { name: t_arrive,   offset: 20, width: 4, type: uint }
     - { name: t_commit,   offset: 24, width: 4, type: uint }
-    - { name: bid_count,  offset: 28, width: 1, type: uint }
-    - { name: ask_count,  offset: 29, width: 1, type: uint }
-    - { name: side_id,    offset: 30, width: 1, type: uint }  # 0=bids, 1=asks (matches ITCH_SIDE_*)
-    - { name: reserved,   offset: 31, width: 1, type: uint }
+    - { name: bid_price,  offset: 28, width: 4, type: uint }  # 0 when no bids
+    - { name: bid_shares, offset: 32, width: 4, type: uint }
+    - { name: ask_price,  offset: 36, width: 4, type: uint }  # 0 when no asks
+    - { name: ask_shares, offset: 40, width: 4, type: uint }
+    - { name: bid_orders, offset: 44, width: 2, type: uint }  # orders at best bid
+    - { name: ask_orders, offset: 46, width: 2, type: uint }
 
-# One resting order. Field order matches snapshot_format.yaml from
-# moldudp-scapy so the existing StructUnpacker needs minimal change.
-level:
-  length: 16
-  fields:
-    - { name: price,     offset:  0, width: 4, type: uint }
-    - { name: quantity,  offset:  4, width: 4, type: uint }
-    - { name: order_id,  offset:  8, width: 8, type: uint }
-
-# Body layout, per packet: MAX_ORDERS_PER_SIDE level slots for the side
-# named by header.side_id. Slots at or beyond that side's count are
-# zero-filled. Both bid_count and ask_count are present in EVERY packet
-# header so the consumer can tell whether a pair is complete before both
-# packets arrive.
-body:
-  per_packet:
-    - { name: levels, count_field_when_bids: bid_count, count_field_when_asks: ask_count }
-
-# Entries within a side are sorted ascending by order_id. This matches
-# Orderbook-cpp/include/trace.h::SortSide and makes the snapshot independent
-# of whichever internal slot layout the RTL or the model happens to use.
-sort_key: order_id
-sort_order: ascending
-
+# Message-level outcome of the ITCH message this packet follows. Bits 2 and 3
+# keep their v2 positions.
 status_bits:
-  - { name: book_full_bid,     bit: 0, comment: bid side at capacity }
-  - { name: book_full_ask,     bit: 1, comment: ask side at capacity }
+  - { name: order_dropped,     bit: 0, comment: add found its set and the CAM full; order not stored }
+  - { name: price_rejected,    bit: 1, comment: add price off-tick or outside the price window; order not stored }
   - { name: mold_gap_seen,     bit: 2, comment: sticky; a MoldUDP64 sequence gap was observed }
-  - { name: unknown_order_ref, bit: 3, comment: last D/U/E referenced an order not in the book }
+  - { name: unknown_order_ref, bit: 3, comment: last D/U/E/C/X referenced an order not in the book }
 
 # Fields excluded from the RTL-vs-model byte diff. The cycle counters are
 # hardware-only timing data with no software equivalent; the scoreboard

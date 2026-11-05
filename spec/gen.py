@@ -40,12 +40,13 @@ STRUCT_CHAR_BY_WIDTH = {1: "B", 2: "H", 4: "I", 8: "Q"}
 # Loading and validation
 # --------------------------------------------------------------------------
 
-def load_specs() -> tuple[dict, dict, dict]:
+def load_specs() -> tuple[dict, dict, dict, dict]:
     def load(name: str) -> dict:
         with open(SPEC_DIR / name, encoding="utf-8") as f:
             return yaml.safe_load(f)
 
-    return load("itch.yaml"), load("moldudp64.yaml"), load("snapshot.yaml")
+    return (load("itch.yaml"), load("moldudp64.yaml"), load("snapshot.yaml"),
+            load("book.yaml"))
 
 
 def check_contiguous(fields: list[dict], total: int, what: str) -> None:
@@ -104,10 +105,8 @@ def validate(itch: dict, mold: dict, snap: dict) -> None:
     check_contiguous(mold["header"]["fields"], mold["header"]["length"],
                      "moldudp64.header")
 
-    check_contiguous(snap["header"]["fields"], snap["header"]["length"],
-                     "snapshot.header")
-    check_contiguous(snap["level"]["fields"], snap["level"]["length"],
-                     "snapshot.level")
+    check_contiguous(snap["packet"]["fields"], snap["packet"]["length"],
+                     "snapshot.packet")
 
     bits = [b["bit"] for b in snap["status_bits"]]
     if len(bits) != len(set(bits)):
@@ -115,24 +114,58 @@ def validate(itch: dict, mold: dict, snap: dict) -> None:
     if any(b < 0 or b > 7 for b in bits):
         raise ValueError("snapshot: status is one byte; bits must be 0..7")
 
-    masked = {f["name"] for f in snap["header"]["fields"]}
+    masked = {f["name"] for f in snap["packet"]["fields"]}
     for name in snap["diff_masked_fields"]:
         if name not in masked:
             raise ValueError(
                 f"snapshot: diff_masked_fields names '{name}', "
-                f"which is not a header field"
+                f"which is not a packet field"
             )
 
 
-def snapshot_packet_length(snap: dict) -> int:
-    """Length of ONE snapshot packet (one side).
+def validate_book(book: dict) -> None:
+    table = book["order_table"]
+    prices = book["price_book"]
 
-    Each ITCH message emits `packets_per_message` such packets; the total
-    egress volume per message is packet_length * packets_per_message. The
-    MTU check in test_spec.py is against this per-packet length, since
-    each packet is its own UDP datagram.
-    """
-    return snap["header"]["length"] + snap["max_orders_per_side"] * snap["level"]["length"]
+    if table["hash"] != "xor_fold":
+        raise ValueError(f"book: unknown hash '{table['hash']}'")
+    if not 1 <= table["hash_width"] <= 20:
+        raise ValueError("book: hash_width must be 1..20")
+    if table["ways"] < 1 or table["cam_depth"] < 0:
+        raise ValueError("book: need ways >= 1 and cam_depth >= 0")
+    if prices["tick"] < 1 or not 1 <= prices["slot_width"] <= 20:
+        raise ValueError("book: need tick >= 1 and slot_width 1..20")
+
+    # The table stores the slot, so the two widths must agree -- a mismatch
+    # here is a truncated slot in the RTL and a silent wrong-level bug.
+    slot_field = next(f for f in table["entry"] if f["name"] == "slot")
+    if slot_field["width"] != prices["slot_width"]:
+        raise ValueError(
+            f"book: order_table.entry.slot is {slot_field['width']} bits but "
+            f"price_book.slot_width is {prices['slot_width']}"
+        )
+
+
+def book_derived(book: dict) -> dict:
+    """Named book constants, in emit order, shared by all three emitters."""
+    table = book["order_table"]
+    prices = book["price_book"]
+    slots = 1 << prices["slot_width"]
+    widths = {f["name"]: f["width"] for f in table["entry"]}
+    level = {f["name"]: f["width"] for f in prices["level"]}
+    return {
+        "BOOK_HASH_W": table["hash_width"],
+        "BOOK_SETS": 1 << table["hash_width"],
+        "BOOK_WAYS": table["ways"],
+        "BOOK_CAM_DEPTH": table["cam_depth"],
+        "BOOK_ENTRY_W": sum(widths.values()),
+        "BOOK_PRICE_TICK": prices["tick"],
+        "BOOK_SLOT_W": prices["slot_width"],
+        "BOOK_SLOTS": slots,
+        "BOOK_SLOT_CENTER": slots // 2,
+        "BOOK_LEVEL_SHARES_W": level["shares"],
+        "BOOK_LEVEL_ORDERS_W": level["orders"],
+    }
 
 
 def struct_format(fields: list[dict]) -> str:
@@ -195,7 +228,7 @@ VERILOG_PREAMBLE = """\
 """
 
 
-def emit_verilog(itch: dict, mold: dict, snap: dict) -> str:
+def emit_verilog(itch: dict, mold: dict, snap: dict, book: dict) -> str:
     out = [VERILOG_PREAMBLE.format(banner=BANNER)]
     add = out.append
 
@@ -236,27 +269,20 @@ def emit_verilog(itch: dict, mold: dict, snap: dict) -> str:
     add("\n// ---- Book snapshot (FPGA -> host, UDP payload) ----\n")
     add(f"`define SNAP_MAGIC 16'h{snap['magic']:04X}\n")
     add(f"`define SNAP_VERSION 8'd{snap['version']}\n")
-    add(f"`define SNAP_HDR_LEN {snap['header']['length']}\n")
-    add(f"`define SNAP_LEVEL_LEN {snap['level']['length']}\n")
-    add(f"`define SNAP_MAX_PER_SIDE {snap['max_orders_per_side']}\n")
-    add(f"`define SNAP_PACKETS_PER_MSG {snap['packets_per_message']}\n")
-    add(f"`define SNAP_PACKET_LEN {snapshot_packet_length(snap)}"
-        f"  // per-side UDP datagram; two per ITCH message\n")
-    add("\n// side_id values -- match the internal 1-bit Side encoding.\n")
-    add(f"`define SNAP_SIDE_ID_BIDS 8'd{itch['side_encoding']['buy']['internal']}\n")
-    add(f"`define SNAP_SIDE_ID_ASKS 8'd{itch['side_encoding']['sell']['internal']}\n")
-    for field in snap["header"]["fields"]:
+    add(f"`define SNAP_PACKET_LEN {snap['packet']['length']}"
+        f"  // one UDP datagram per ITCH message\n")
+    for field in snap["packet"]["fields"]:
         fname = field["name"].upper()
         add(f"`define SNAP_{fname}_OFF {field['offset']}\n")
         add(f"`define SNAP_{fname}_W {field['width']}\n")
-    for field in snap["level"]["fields"]:
-        fname = field["name"].upper()
-        add(f"`define SNAP_LEVEL_{fname}_OFF {field['offset']}\n")
-        add(f"`define SNAP_LEVEL_{fname}_W {field['width']}\n")
     add("\n// Snapshot status word bit positions.\n")
     for bit in snap["status_bits"]:
         add(f"`define SNAP_STATUS_{bit['name'].upper()} {bit['bit']}"
             f"  // {bit['comment']}\n")
+
+    add("\n// ---- Order book geometry ----\n")
+    for name, value in book_derived(book).items():
+        add(f"`define {name} {value}\n")
 
     add("\n`endif // ITCH_DEFS_VH\n")
     return "".join(out)
@@ -266,7 +292,7 @@ def emit_verilog(itch: dict, mold: dict, snap: dict) -> str:
 # C++
 # --------------------------------------------------------------------------
 
-def emit_cpp(itch: dict, mold: dict, snap: dict) -> str:
+def emit_cpp(itch: dict, mold: dict, snap: dict, book: dict) -> str:
     out = [
         f"// {BANNER}\n"
         "//\n"
@@ -325,37 +351,23 @@ def emit_cpp(itch: dict, mold: dict, snap: dict) -> str:
     add("// ---- Book snapshot (golden model -> trace, FPGA -> host) ----\n\n")
     add(f"inline constexpr std::uint16_t SNAP_MAGIC = 0x{snap['magic']:04X};\n")
     add(f"inline constexpr std::uint8_t SNAP_VERSION = {snap['version']};\n")
-    add(f"inline constexpr std::size_t SNAP_HDR_LEN = "
-        f"{snap['header']['length']};\n")
-    add(f"inline constexpr std::size_t SNAP_LEVEL_LEN = "
-        f"{snap['level']['length']};\n")
-    add(f"inline constexpr std::size_t SNAP_MAX_PER_SIDE = "
-        f"{snap['max_orders_per_side']};\n")
-    add(f"inline constexpr std::size_t SNAP_PACKETS_PER_MSG = "
-        f"{snap['packets_per_message']};\n")
     add(f"inline constexpr std::size_t SNAP_PACKET_LEN = "
-        f"{snapshot_packet_length(snap)};"
-        f"  // per-side UDP datagram; two per ITCH message\n")
-    add(f"inline constexpr std::uint8_t SNAP_SIDE_ID_BIDS = "
-        f"{itch['side_encoding']['buy']['internal']};\n")
-    add(f"inline constexpr std::uint8_t SNAP_SIDE_ID_ASKS = "
-        f"{itch['side_encoding']['sell']['internal']};\n")
-    for field in snap["header"]["fields"]:
+        f"{snap['packet']['length']};"
+        f"  // one UDP datagram per ITCH message\n")
+    for field in snap["packet"]["fields"]:
         fname = field["name"].upper()
         add(f"inline constexpr std::size_t SNAP_{fname}_OFF = "
             f"{field['offset']};\n")
         add(f"inline constexpr std::size_t SNAP_{fname}_W = "
             f"{field['width']};\n")
-    for field in snap["level"]["fields"]:
-        fname = field["name"].upper()
-        add(f"inline constexpr std::size_t SNAP_LEVEL_{fname}_OFF = "
-            f"{field['offset']};\n")
-        add(f"inline constexpr std::size_t SNAP_LEVEL_{fname}_W = "
-            f"{field['width']};\n")
     add("\n// Snapshot status word bit positions.\n")
     for bit in snap["status_bits"]:
         add(f"inline constexpr std::uint8_t SNAP_STATUS_{bit['name'].upper()} = "
             f"{bit['bit']};  // {bit['comment']}\n")
+
+    add("\n// ---- Order book geometry ----\n\n")
+    for name, value in book_derived(book).items():
+        add(f"inline constexpr std::uint32_t {name} = {value};\n")
 
     return "".join(out)
 
@@ -364,7 +376,7 @@ def emit_cpp(itch: dict, mold: dict, snap: dict) -> str:
 # Python
 # --------------------------------------------------------------------------
 
-def emit_python(itch: dict, mold: dict, snap: dict) -> str:
+def emit_python(itch: dict, mold: dict, snap: dict, book: dict) -> str:
     out = [
         f'"""{BANNER}\n'
         "\n"
@@ -421,20 +433,11 @@ def emit_python(itch: dict, mold: dict, snap: dict) -> str:
     add("# ---- Book snapshot ----\n\n")
     add(f"SNAP_MAGIC = 0x{snap['magic']:04X}\n")
     add(f"SNAP_VERSION = {snap['version']}\n")
-    add(f"SNAP_HDR_LEN = {snap['header']['length']}\n")
-    add(f"SNAP_HDR_FMT = {struct_format(snap['header']['fields'])!r}\n")
-    add(f"SNAP_LEVEL_LEN = {snap['level']['length']}\n")
-    add(f"SNAP_LEVEL_FMT = {struct_format(snap['level']['fields'])!r}\n")
-    add(f"SNAP_MAX_PER_SIDE = {snap['max_orders_per_side']}\n")
-    add(f"SNAP_PACKETS_PER_MSG = {snap['packets_per_message']}\n")
-    add(f"SNAP_PACKET_LEN = {snapshot_packet_length(snap)}"
-        f"  # per-side UDP datagram; two per ITCH message\n")
-    add(f"SNAP_SIDE_ID_BIDS = {itch['side_encoding']['buy']['internal']}\n")
-    add(f"SNAP_SIDE_ID_ASKS = {itch['side_encoding']['sell']['internal']}\n")
-    add("SNAP_HDR_FIELDS = "
-        f"{[f['name'] for f in snap['header']['fields']]!r}\n")
-    add("SNAP_LEVEL_FIELDS = "
-        f"{[f['name'] for f in snap['level']['fields']]!r}\n\n")
+    add(f"SNAP_PACKET_LEN = {snap['packet']['length']}"
+        f"  # one UDP datagram per ITCH message\n")
+    add(f"SNAP_PACKET_FMT = {struct_format(snap['packet']['fields'])!r}\n")
+    add("SNAP_PACKET_FIELDS = "
+        f"{[f['name'] for f in snap['packet']['fields']]!r}\n\n")
 
     add("SNAP_STATUS_BITS = {\n")
     for bit in snap["status_bits"]:
@@ -443,7 +446,11 @@ def emit_python(itch: dict, mold: dict, snap: dict) -> str:
 
     add("# Header fields the RTL-vs-model scoreboard must mask before\n"
         "# comparing: hardware cycle counters with no software equivalent.\n")
-    add(f"SNAP_DIFF_MASKED_FIELDS = {snap['diff_masked_fields']!r}\n")
+    add(f"SNAP_DIFF_MASKED_FIELDS = {snap['diff_masked_fields']!r}\n\n")
+
+    add("# ---- Order book geometry ----\n\n")
+    for name, value in book_derived(book).items():
+        add(f"{name} = {value}\n")
 
     return "".join(out)
 
@@ -460,18 +467,19 @@ def main() -> int:
                         help="exit non-zero if on-disk files are out of date")
     args = parser.parse_args()
 
-    itch, mold, snap = load_specs()
+    itch, mold, snap, book = load_specs()
 
     try:
         validate(itch, mold, snap)
+        validate_book(book)
     except ValueError as exc:
         print(f"spec validation failed: {exc}", file=sys.stderr)
         return 1
 
     outputs = {
-        "itch_defs.vh": emit_verilog(itch, mold, snap),
-        "itch_defs.h": emit_cpp(itch, mold, snap),
-        "itch_defs.py": emit_python(itch, mold, snap),
+        "itch_defs.vh": emit_verilog(itch, mold, snap, book),
+        "itch_defs.h": emit_cpp(itch, mold, snap, book),
+        "itch_defs.py": emit_python(itch, mold, snap, book),
     }
 
     if args.check:
@@ -494,12 +502,19 @@ def main() -> int:
         path.write_text(content, encoding="utf-8")
         print(f"wrote {path}")
 
-    packet = snapshot_packet_length(snap)
-    print(f"\nsnapshot packet: {packet} bytes "
-          f"({snap['header']['length']} header + "
-          f"{snap['max_orders_per_side']} x {snap['level']['length']} levels), "
-          f"x {snap['packets_per_message']} per ITCH message "
-          f"= {packet * snap['packets_per_message']} bytes total egress")
+    print(f"\nsnapshot packet: {snap['packet']['length']} bytes, "
+          f"one per ITCH message")
+
+    b = book_derived(book)
+    table_bits = (b["BOOK_SETS"] * b["BOOK_WAYS"] + b["BOOK_CAM_DEPTH"]) \
+        * b["BOOK_ENTRY_W"]
+    level_w = b["BOOK_LEVEL_SHARES_W"] + b["BOOK_LEVEL_ORDERS_W"]
+    book_bits = 2 * b["BOOK_SLOTS"] * level_w
+    print(f"order table: {b['BOOK_SETS']} sets x {b['BOOK_WAYS']} ways + "
+          f"{b['BOOK_CAM_DEPTH']} CAM x {b['BOOK_ENTRY_W']} b = "
+          f"{table_bits / 1e3:.0f} Kb")
+    print(f"price books: 2 x {b['BOOK_SLOTS']} slots x {level_w} b = "
+          f"{book_bits / 1e3:.0f} Kb  (total {(table_bits + book_bits) / 1e6:.2f} Mb)")
     return 0
 
 

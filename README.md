@@ -4,8 +4,6 @@ An FPGA order book engine that consumes NASDAQ ITCH 5.0 messages framed in
 MoldUDP64 over Ethernet, reconstructs a bounded order book in hardware, and
 streams book snapshots back to the host over UDP.
 
-A personal project by Devanandan J.
-
 ## What this is, precisely
 
 An ITCH **book reconstruction** engine, not a matching engine. ITCH 5.0 is an

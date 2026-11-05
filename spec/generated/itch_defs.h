@@ -10,7 +10,7 @@
 
 // ---- ITCH 5.0 ----
 
-inline constexpr std::size_t ITCH_MAX_MSG_LEN = 36;
+inline constexpr std::size_t ITCH_MAX_MSG_LEN = 40;
 
 // A - Add Order - No MPID Attribution
 inline constexpr std::uint8_t ITCH_ADD_ORDER_TYPE = 'A';
@@ -33,6 +33,30 @@ inline constexpr std::size_t ITCH_ADD_ORDER_STOCK_OFF = 24;
 inline constexpr std::size_t ITCH_ADD_ORDER_STOCK_W = 8;
 inline constexpr std::size_t ITCH_ADD_ORDER_PRICE_OFF = 32;
 inline constexpr std::size_t ITCH_ADD_ORDER_PRICE_W = 4;
+
+// F - Add Order - MPID Attribution. Same book effect as 'A'; the trailing attribution is ignored.
+inline constexpr std::uint8_t ITCH_ADD_ORDER_MPID_TYPE = 'F';
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_LEN = 40;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_MESSAGE_TYPE_OFF = 0;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_MESSAGE_TYPE_W = 1;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_STOCK_LOCATE_OFF = 1;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_STOCK_LOCATE_W = 2;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_TRACKING_NUMBER_OFF = 3;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_TRACKING_NUMBER_W = 2;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_TIMESTAMP_OFF = 5;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_TIMESTAMP_W = 6;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_ORDER_REF_OFF = 11;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_ORDER_REF_W = 8;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_SIDE_OFF = 19;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_SIDE_W = 1;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_SHARES_OFF = 20;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_SHARES_W = 4;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_STOCK_OFF = 24;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_STOCK_W = 8;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_PRICE_OFF = 32;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_PRICE_W = 4;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_ATTRIBUTION_OFF = 36;
+inline constexpr std::size_t ITCH_ADD_ORDER_MPID_ATTRIBUTION_W = 4;
 
 // D - Order Delete
 inline constexpr std::uint8_t ITCH_ORDER_DELETE_TYPE = 'D';
@@ -86,6 +110,44 @@ inline constexpr std::size_t ITCH_ORDER_EXECUTED_EXECUTED_SHARES_W = 4;
 inline constexpr std::size_t ITCH_ORDER_EXECUTED_MATCH_NUMBER_OFF = 23;
 inline constexpr std::size_t ITCH_ORDER_EXECUTED_MATCH_NUMBER_W = 8;
 
+// C - Order Executed With Price. execution_price is the trade price, not the resting order's price - the book ignores it and reduces the level the order is stored at.
+inline constexpr std::uint8_t ITCH_ORDER_EXECUTED_WITH_PRICE_TYPE = 'C';
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_LEN = 36;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_MESSAGE_TYPE_OFF = 0;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_MESSAGE_TYPE_W = 1;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_STOCK_LOCATE_OFF = 1;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_STOCK_LOCATE_W = 2;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_TRACKING_NUMBER_OFF = 3;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_TRACKING_NUMBER_W = 2;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_TIMESTAMP_OFF = 5;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_TIMESTAMP_W = 6;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_ORDER_REF_OFF = 11;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_ORDER_REF_W = 8;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_EXECUTED_SHARES_OFF = 19;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_EXECUTED_SHARES_W = 4;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_MATCH_NUMBER_OFF = 23;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_MATCH_NUMBER_W = 8;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_PRINTABLE_OFF = 31;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_PRINTABLE_W = 1;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_EXECUTION_PRICE_OFF = 32;
+inline constexpr std::size_t ITCH_ORDER_EXECUTED_WITH_PRICE_EXECUTION_PRICE_W = 4;
+
+// X - Order Cancel. Partial cancel - reduces shares; the order is removed only when no shares remain.
+inline constexpr std::uint8_t ITCH_ORDER_CANCEL_TYPE = 'X';
+inline constexpr std::size_t ITCH_ORDER_CANCEL_LEN = 23;
+inline constexpr std::size_t ITCH_ORDER_CANCEL_MESSAGE_TYPE_OFF = 0;
+inline constexpr std::size_t ITCH_ORDER_CANCEL_MESSAGE_TYPE_W = 1;
+inline constexpr std::size_t ITCH_ORDER_CANCEL_STOCK_LOCATE_OFF = 1;
+inline constexpr std::size_t ITCH_ORDER_CANCEL_STOCK_LOCATE_W = 2;
+inline constexpr std::size_t ITCH_ORDER_CANCEL_TRACKING_NUMBER_OFF = 3;
+inline constexpr std::size_t ITCH_ORDER_CANCEL_TRACKING_NUMBER_W = 2;
+inline constexpr std::size_t ITCH_ORDER_CANCEL_TIMESTAMP_OFF = 5;
+inline constexpr std::size_t ITCH_ORDER_CANCEL_TIMESTAMP_W = 6;
+inline constexpr std::size_t ITCH_ORDER_CANCEL_ORDER_REF_OFF = 11;
+inline constexpr std::size_t ITCH_ORDER_CANCEL_ORDER_REF_W = 8;
+inline constexpr std::size_t ITCH_ORDER_CANCEL_CANCELLED_SHARES_OFF = 19;
+inline constexpr std::size_t ITCH_ORDER_CANCEL_CANCELLED_SHARES_W = 4;
+
 // Side encoding.
 inline constexpr std::uint8_t ITCH_SIDE_BUY_CHAR = 'B';
 inline constexpr std::uint8_t ITCH_SIDE_SELL_CHAR = 'S';
@@ -106,14 +168,8 @@ inline constexpr std::uint16_t MOLD_END_OF_SESSION = 0xFFFF;
 // ---- Book snapshot (golden model -> trace, FPGA -> host) ----
 
 inline constexpr std::uint16_t SNAP_MAGIC = 0x4F42;
-inline constexpr std::uint8_t SNAP_VERSION = 2;
-inline constexpr std::size_t SNAP_HDR_LEN = 32;
-inline constexpr std::size_t SNAP_LEVEL_LEN = 16;
-inline constexpr std::size_t SNAP_MAX_PER_SIDE = 64;
-inline constexpr std::size_t SNAP_PACKETS_PER_MSG = 2;
-inline constexpr std::size_t SNAP_PACKET_LEN = 1056;  // per-side UDP datagram; two per ITCH message
-inline constexpr std::uint8_t SNAP_SIDE_ID_BIDS = 0;
-inline constexpr std::uint8_t SNAP_SIDE_ID_ASKS = 1;
+inline constexpr std::uint8_t SNAP_VERSION = 3;
+inline constexpr std::size_t SNAP_PACKET_LEN = 48;  // one UDP datagram per ITCH message
 inline constexpr std::size_t SNAP_MAGIC_OFF = 0;
 inline constexpr std::size_t SNAP_MAGIC_W = 2;
 inline constexpr std::size_t SNAP_VERSION_OFF = 2;
@@ -130,23 +186,35 @@ inline constexpr std::size_t SNAP_T_ARRIVE_OFF = 20;
 inline constexpr std::size_t SNAP_T_ARRIVE_W = 4;
 inline constexpr std::size_t SNAP_T_COMMIT_OFF = 24;
 inline constexpr std::size_t SNAP_T_COMMIT_W = 4;
-inline constexpr std::size_t SNAP_BID_COUNT_OFF = 28;
-inline constexpr std::size_t SNAP_BID_COUNT_W = 1;
-inline constexpr std::size_t SNAP_ASK_COUNT_OFF = 29;
-inline constexpr std::size_t SNAP_ASK_COUNT_W = 1;
-inline constexpr std::size_t SNAP_SIDE_ID_OFF = 30;
-inline constexpr std::size_t SNAP_SIDE_ID_W = 1;
-inline constexpr std::size_t SNAP_RESERVED_OFF = 31;
-inline constexpr std::size_t SNAP_RESERVED_W = 1;
-inline constexpr std::size_t SNAP_LEVEL_PRICE_OFF = 0;
-inline constexpr std::size_t SNAP_LEVEL_PRICE_W = 4;
-inline constexpr std::size_t SNAP_LEVEL_QUANTITY_OFF = 4;
-inline constexpr std::size_t SNAP_LEVEL_QUANTITY_W = 4;
-inline constexpr std::size_t SNAP_LEVEL_ORDER_ID_OFF = 8;
-inline constexpr std::size_t SNAP_LEVEL_ORDER_ID_W = 8;
+inline constexpr std::size_t SNAP_BID_PRICE_OFF = 28;
+inline constexpr std::size_t SNAP_BID_PRICE_W = 4;
+inline constexpr std::size_t SNAP_BID_SHARES_OFF = 32;
+inline constexpr std::size_t SNAP_BID_SHARES_W = 4;
+inline constexpr std::size_t SNAP_ASK_PRICE_OFF = 36;
+inline constexpr std::size_t SNAP_ASK_PRICE_W = 4;
+inline constexpr std::size_t SNAP_ASK_SHARES_OFF = 40;
+inline constexpr std::size_t SNAP_ASK_SHARES_W = 4;
+inline constexpr std::size_t SNAP_BID_ORDERS_OFF = 44;
+inline constexpr std::size_t SNAP_BID_ORDERS_W = 2;
+inline constexpr std::size_t SNAP_ASK_ORDERS_OFF = 46;
+inline constexpr std::size_t SNAP_ASK_ORDERS_W = 2;
 
 // Snapshot status word bit positions.
-inline constexpr std::uint8_t SNAP_STATUS_BOOK_FULL_BID = 0;  // bid side at capacity
-inline constexpr std::uint8_t SNAP_STATUS_BOOK_FULL_ASK = 1;  // ask side at capacity
+inline constexpr std::uint8_t SNAP_STATUS_ORDER_DROPPED = 0;  // add found its set and the CAM full; order not stored
+inline constexpr std::uint8_t SNAP_STATUS_PRICE_REJECTED = 1;  // add price off-tick or outside the price window; order not stored
 inline constexpr std::uint8_t SNAP_STATUS_MOLD_GAP_SEEN = 2;  // sticky; a MoldUDP64 sequence gap was observed
-inline constexpr std::uint8_t SNAP_STATUS_UNKNOWN_ORDER_REF = 3;  // last D/U/E referenced an order not in the book
+inline constexpr std::uint8_t SNAP_STATUS_UNKNOWN_ORDER_REF = 3;  // last D/U/E/C/X referenced an order not in the book
+
+// ---- Order book geometry ----
+
+inline constexpr std::uint32_t BOOK_HASH_W = 10;
+inline constexpr std::uint32_t BOOK_SETS = 1024;
+inline constexpr std::uint32_t BOOK_WAYS = 3;
+inline constexpr std::uint32_t BOOK_CAM_DEPTH = 16;
+inline constexpr std::uint32_t BOOK_ENTRY_W = 112;
+inline constexpr std::uint32_t BOOK_PRICE_TICK = 100;
+inline constexpr std::uint32_t BOOK_SLOT_W = 14;
+inline constexpr std::uint32_t BOOK_SLOTS = 16384;
+inline constexpr std::uint32_t BOOK_SLOT_CENTER = 8192;
+inline constexpr std::uint32_t BOOK_LEVEL_SHARES_W = 32;
+inline constexpr std::uint32_t BOOK_LEVEL_ORDERS_W = 16;

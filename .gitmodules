@@ -1,3 +1,6 @@
-[submodule "golden-model"]
-	path = golden-model
+[submodule "golden"]
+	path = golden
 	url = https://github.com/devanandanj/Orderbook-cpp.git
+[submodule "ethernet"]
+	path = ethernet
+	url = https://github.com/devanandanj/low-latency-1g-ethernet.git

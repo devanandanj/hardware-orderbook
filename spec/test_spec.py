@@ -49,6 +49,10 @@ MODEL_CONSTANTS = {
         "ORDER_DELETE_LEN": lambda: d.ITCH_MESSAGES["order_delete"]["length"],
         "ORDER_REPLACE_LEN": lambda: d.ITCH_MESSAGES["order_replace"]["length"],
         "ORDER_EXECUTE_LEN": lambda: d.ITCH_MESSAGES["order_executed"]["length"],
+        "ADD_ORDER_MPID_LEN": lambda: d.ITCH_MESSAGES["add_order_mpid"]["length"],
+        "ORDER_EXECUTE_PRICE_LEN":
+            lambda: d.ITCH_MESSAGES["order_executed_with_price"]["length"],
+        "ORDER_CANCEL_LEN": lambda: d.ITCH_MESSAGES["order_cancel"]["length"],
     },
     "include/moldudp64.h": {
         "MOLDUDP64_HEADER_LEN": lambda: d.MOLD_HDR_LEN,
@@ -60,7 +64,15 @@ MODEL_CONSTANTS = {
         "MOLDUDP64_END_OF_SESSION": lambda: d.MOLD_END_OF_SESSION,
     },
     "include/using.h": {
-        "MAX_ORDERS_PER_SIDE": lambda: d.SNAP_MAX_PER_SIDE,
+        "HASH_W": lambda: d.BOOK_HASH_W,
+        "WAYS": lambda: d.BOOK_WAYS,
+        "CAM_DEPTH": lambda: d.BOOK_CAM_DEPTH,
+        "PRICE_TICK": lambda: d.BOOK_PRICE_TICK,
+        "SLOT_W": lambda: d.BOOK_SLOT_W,
+    },
+    "include/snapshot.h": {
+        "SNAP_VERSION": lambda: d.SNAP_VERSION,
+        "SNAP_PACKET_LEN": lambda: d.SNAP_PACKET_LEN,
     },
 }
 
@@ -89,24 +101,23 @@ def test_struct_formats_match_declared_lengths() -> None:
         )
 
     assert struct.calcsize(d.MOLD_HDR_FMT) == d.MOLD_HDR_LEN
-    assert struct.calcsize(d.SNAP_HDR_FMT) == d.SNAP_HDR_LEN
-    assert struct.calcsize(d.SNAP_LEVEL_FMT) == d.SNAP_LEVEL_LEN
+    assert struct.calcsize(d.SNAP_PACKET_FMT) == d.SNAP_PACKET_LEN
 
 
-def test_snapshot_packet_length() -> None:
-    # A snapshot packet carries one side. MTU limits us to one PACKET per
-    # datagram, not one pair -- so this is the invariant that must hold.
-    expected = d.SNAP_HDR_LEN + d.SNAP_MAX_PER_SIDE * d.SNAP_LEVEL_LEN
-    assert d.SNAP_PACKET_LEN == expected
-
+def test_snapshot_packet_fits_one_datagram() -> None:
     assert d.SNAP_PACKET_LEN <= MAX_UNFRAGMENTED_UDP_PAYLOAD, (
-        f"snapshot packet is {d.SNAP_PACKET_LEN} bytes and would fragment; "
-        f"reduce max_orders_per_side or shrink the level record"
+        f"snapshot packet is {d.SNAP_PACKET_LEN} bytes and would fragment"
     )
 
-    assert d.SNAP_PACKETS_PER_MSG == 2, (
-        "the two-packet split is the whole reason we can go above 45 "
-        "orders per side; do not silently drop it"
+
+def test_book_geometry() -> None:
+    assert d.BOOK_SETS == 1 << d.BOOK_HASH_W
+    assert d.BOOK_SLOTS == 1 << d.BOOK_SLOT_W
+    assert d.BOOK_SLOT_CENTER == d.BOOK_SLOTS // 2
+    # An order count that cannot exceed what the table can hold never wraps.
+    capacity = d.BOOK_SETS * d.BOOK_WAYS + d.BOOK_CAM_DEPTH
+    assert capacity < 1 << d.BOOK_LEVEL_ORDERS_W, (
+        f"a level can hold {capacity} orders; orders field is too narrow"
     )
 
 
@@ -116,10 +127,10 @@ def test_status_bits_fit_in_one_byte() -> None:
     assert all(0 <= b <= 7 for b in bits), "status word is only one byte wide"
 
 
-def test_masked_fields_exist_in_header() -> None:
+def test_masked_fields_exist_in_packet() -> None:
     for name in d.SNAP_DIFF_MASKED_FIELDS:
-        assert name in d.SNAP_HDR_FIELDS, (
-            f"'{name}' is masked from the diff but is not a header field"
+        assert name in d.SNAP_PACKET_FIELDS, (
+            f"'{name}' is masked from the diff but is not a packet field"
         )
 
 

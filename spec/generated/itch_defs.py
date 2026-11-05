@@ -8,7 +8,7 @@ instead of hand-written format strings.
 
 # ---- ITCH 5.0 ----
 
-ITCH_MAX_MSG_LEN = 36
+ITCH_MAX_MSG_LEN = 40
 
 ITCH_MESSAGES = {
     'add_order': {
@@ -25,6 +25,23 @@ ITCH_MESSAGES = {
             {'name': 'shares', 'offset': 20, 'width': 4, 'type': 'uint'},
             {'name': 'stock', 'offset': 24, 'width': 8, 'type': 'ascii'},
             {'name': 'price', 'offset': 32, 'width': 4, 'type': 'uint'},
+        ],
+    },
+    'add_order_mpid': {
+        'type_char': 'F',
+        'length': 40,
+        'struct_fmt': '>cHH6sQcI8sI4s',
+        'fields': [
+            {'name': 'message_type', 'offset': 0, 'width': 1, 'type': 'char'},
+            {'name': 'stock_locate', 'offset': 1, 'width': 2, 'type': 'uint'},
+            {'name': 'tracking_number', 'offset': 3, 'width': 2, 'type': 'uint'},
+            {'name': 'timestamp', 'offset': 5, 'width': 6, 'type': 'uint'},
+            {'name': 'order_ref', 'offset': 11, 'width': 8, 'type': 'uint'},
+            {'name': 'side', 'offset': 19, 'width': 1, 'type': 'char'},
+            {'name': 'shares', 'offset': 20, 'width': 4, 'type': 'uint'},
+            {'name': 'stock', 'offset': 24, 'width': 8, 'type': 'ascii'},
+            {'name': 'price', 'offset': 32, 'width': 4, 'type': 'uint'},
+            {'name': 'attribution', 'offset': 36, 'width': 4, 'type': 'ascii'},
         ],
     },
     'order_delete': {
@@ -68,13 +85,45 @@ ITCH_MESSAGES = {
             {'name': 'match_number', 'offset': 23, 'width': 8, 'type': 'uint'},
         ],
     },
+    'order_executed_with_price': {
+        'type_char': 'C',
+        'length': 36,
+        'struct_fmt': '>cHH6sQIQcI',
+        'fields': [
+            {'name': 'message_type', 'offset': 0, 'width': 1, 'type': 'char'},
+            {'name': 'stock_locate', 'offset': 1, 'width': 2, 'type': 'uint'},
+            {'name': 'tracking_number', 'offset': 3, 'width': 2, 'type': 'uint'},
+            {'name': 'timestamp', 'offset': 5, 'width': 6, 'type': 'uint'},
+            {'name': 'order_ref', 'offset': 11, 'width': 8, 'type': 'uint'},
+            {'name': 'executed_shares', 'offset': 19, 'width': 4, 'type': 'uint'},
+            {'name': 'match_number', 'offset': 23, 'width': 8, 'type': 'uint'},
+            {'name': 'printable', 'offset': 31, 'width': 1, 'type': 'char'},
+            {'name': 'execution_price', 'offset': 32, 'width': 4, 'type': 'uint'},
+        ],
+    },
+    'order_cancel': {
+        'type_char': 'X',
+        'length': 23,
+        'struct_fmt': '>cHH6sQI',
+        'fields': [
+            {'name': 'message_type', 'offset': 0, 'width': 1, 'type': 'char'},
+            {'name': 'stock_locate', 'offset': 1, 'width': 2, 'type': 'uint'},
+            {'name': 'tracking_number', 'offset': 3, 'width': 2, 'type': 'uint'},
+            {'name': 'timestamp', 'offset': 5, 'width': 6, 'type': 'uint'},
+            {'name': 'order_ref', 'offset': 11, 'width': 8, 'type': 'uint'},
+            {'name': 'cancelled_shares', 'offset': 19, 'width': 4, 'type': 'uint'},
+        ],
+    },
 }
 
 ITCH_BY_TYPE_CHAR = {
     'A': 'add_order',
+    'F': 'add_order_mpid',
     'D': 'order_delete',
     'U': 'order_replace',
     'E': 'order_executed',
+    'C': 'order_executed_with_price',
+    'X': 'order_cancel',
 }
 
 ITCH_SIDE_BUY_CHAR = 'B'
@@ -99,26 +148,32 @@ MOLD_END_OF_SESSION = 0xFFFF
 # ---- Book snapshot ----
 
 SNAP_MAGIC = 0x4F42
-SNAP_VERSION = 2
-SNAP_HDR_LEN = 32
-SNAP_HDR_FMT = '>HBBIQIIIBBBB'
-SNAP_LEVEL_LEN = 16
-SNAP_LEVEL_FMT = '>IIQ'
-SNAP_MAX_PER_SIDE = 64
-SNAP_PACKETS_PER_MSG = 2
-SNAP_PACKET_LEN = 1056  # per-side UDP datagram; two per ITCH message
-SNAP_SIDE_ID_BIDS = 0
-SNAP_SIDE_ID_ASKS = 1
-SNAP_HDR_FIELDS = ['magic', 'version', 'status', 'snap_seq', 'mold_seq', 'msg_index', 't_arrive', 't_commit', 'bid_count', 'ask_count', 'side_id', 'reserved']
-SNAP_LEVEL_FIELDS = ['price', 'quantity', 'order_id']
+SNAP_VERSION = 3
+SNAP_PACKET_LEN = 48  # one UDP datagram per ITCH message
+SNAP_PACKET_FMT = '>HBBIQIIIIIIIHH'
+SNAP_PACKET_FIELDS = ['magic', 'version', 'status', 'snap_seq', 'mold_seq', 'msg_index', 't_arrive', 't_commit', 'bid_price', 'bid_shares', 'ask_price', 'ask_shares', 'bid_orders', 'ask_orders']
 
 SNAP_STATUS_BITS = {
-    'book_full_bid': 0,  # bid side at capacity
-    'book_full_ask': 1,  # ask side at capacity
+    'order_dropped': 0,  # add found its set and the CAM full; order not stored
+    'price_rejected': 1,  # add price off-tick or outside the price window; order not stored
     'mold_gap_seen': 2,  # sticky; a MoldUDP64 sequence gap was observed
-    'unknown_order_ref': 3,  # last D/U/E referenced an order not in the book
+    'unknown_order_ref': 3,  # last D/U/E/C/X referenced an order not in the book
 }
 
 # Header fields the RTL-vs-model scoreboard must mask before
 # comparing: hardware cycle counters with no software equivalent.
 SNAP_DIFF_MASKED_FIELDS = ['t_arrive', 't_commit']
+
+# ---- Order book geometry ----
+
+BOOK_HASH_W = 10
+BOOK_SETS = 1024
+BOOK_WAYS = 3
+BOOK_CAM_DEPTH = 16
+BOOK_ENTRY_W = 112
+BOOK_PRICE_TICK = 100
+BOOK_SLOT_W = 14
+BOOK_SLOTS = 16384
+BOOK_SLOT_CENTER = 8192
+BOOK_LEVEL_SHARES_W = 32
+BOOK_LEVEL_ORDERS_W = 16

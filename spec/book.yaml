@@ -1,0 +1,43 @@
+# Order book geometry -- single source of truth for the RTL and the golden
+# model.
+#
+# The book has two parts:
+#
+#   order table  ORN -> {side, price slot, shares}. Set-associative hash
+#                table with a small fully-associative overflow CAM. Every
+#                D/U/E/C/X resolves its order here.
+#   price book   per side, one {shares, orders} counter per price slot.
+#                Best bid/ask is the highest/lowest occupied slot.
+#
+# The golden model mirrors this structure BIT-EXACTLY -- same hash, same way
+# choice, same CAM order -- so an order dropped on a full set is dropped in
+# both, and the in-simulation memory compare is slot-for-slot.
+
+order_table:
+  # Set index = XOR-fold of the 64-bit ORN into hash_width bits:
+  #   h[i % hash_width] ^= orn[i]   for i in 0..63
+  hash: xor_fold
+  hash_width: 10          # 1024 sets
+  ways: 3
+  cam_depth: 16
+  # Insert placement: lowest-numbered empty way of the set, else the
+  # lowest-numbered free CAM entry, else the order is DROPPED (status bit
+  # order_dropped). Remove clears the entry's valid bit; nothing moves.
+  entry:
+    - { name: valid,  width: 1 }
+    - { name: orn,    width: 64 }
+    - { name: side,   width: 1 }   # ITCH_SIDE_* internal encoding
+    - { name: slot,   width: 14 }  # price slot, not the 32-bit price
+    - { name: shares, width: 32 }
+
+price_book:
+  # slot = (price - base_price) / tick + center, with center = slots / 2.
+  # base_price is set per session (golden: --base-price, RTL: register).
+  # A price that is not a multiple of tick away from base_price, or that
+  # lands outside [0, slots), is REJECTED (status bit price_rejected) and
+  # the order is not stored.
+  tick: 100               # $0.01 in ITCH's 4-implied-decimal price units
+  slot_width: 14          # 16384 slots per side
+  level:
+    - { name: shares, width: 32 }
+    - { name: orders, width: 16 }

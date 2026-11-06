@@ -46,3 +46,18 @@ jobs:
       - run: make -C tb/order_table
       - run: make -C tb/price_slot
       - run: make -C tb/price_book
+
+  verilog:
+    name: generated Verilog for ISE
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: sudo apt-get update && sudo apt-get install -y verilator iverilog
+      - name: Install sv2v
+        run: |
+          curl -fsSL -o sv2v.zip https://github.com/zachjs/sv2v/releases/download/v0.0.13/sv2v-Linux.zip
+          unzip -q sv2v.zip
+          echo "$PWD/sv2v-Linux" >> "$GITHUB_PATH"
+      - run: make -C synth check

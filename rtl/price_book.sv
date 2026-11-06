@@ -62,13 +62,10 @@ module price_book #(
     // The most competitive set bit: highest for bids, lowest for asks.
     function automatic logic [COL_W-1:0] pick(input logic [COLS-1:0] v);
         pick = '0;
-        for (int i = 0; i < COLS; i++) begin
-            if (SELL) begin
-                if (v[COLS-1-i]) pick = COL_W'(COLS - 1 - i);
-            end else begin
-                if (v[i]) pick = COL_W'(i);
-            end
-        end
+        for (int i = 0; i < COLS; i++)
+            if (!SELL && v[i]) pick = i[COL_W-1:0];
+        for (int i = COLS - 1; i >= 0; i--)
+            if (SELL && v[i]) pick = i[COL_W-1:0];
     endfunction
 
     logic [2:0] state;

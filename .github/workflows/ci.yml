@@ -35,8 +35,8 @@ jobs:
       - uses: YosysHQ/setup-oss-cad-suite@v4
       - run: make -C formal prove cover
 
-  order_table:
-    name: order table vs golden
+  rtl_units:
+    name: RTL blocks vs golden
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,3 +44,5 @@ jobs:
           submodules: recursive
       - run: sudo apt-get update && sudo apt-get install -y verilator
       - run: make -C tb/order_table
+      - run: make -C tb/price_slot
+      - run: make -C tb/price_book

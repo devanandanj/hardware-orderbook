@@ -26,7 +26,8 @@ is in progress.
 | `spec/`, `golden/` | v3 |
 | `ethernet/` | Done, simulation only; not yet connected to the book |
 | `rtl/order_table.sv` | Done, tested against golden in `tb/order_table/`; timing not yet checked |
-| Price book, book FSM, Mold/ITCH ingress, snapshot egress | Not started |
+| `rtl/price_slot.sv`, `rtl/price_book.sv` | Done, tested against golden in `tb/price_slot/` and `tb/price_book/`; timing not yet checked |
+| Book FSM, Mold/ITCH ingress, snapshot egress | Not started |
 | `rtl/book.sv` | v2 core (64 orders per side, full-depth snapshots), to be replaced |
 | `formal/` | Proves the v2 core |
 | `tb/uvm/` | Written for the v2 core; does not build against the v3 golden model |
@@ -39,7 +40,8 @@ spec/        wire-format single source of truth + code generator
   gen.py       emits Verilog / C++ / Python constants
   generated/   DO NOT EDIT -- regenerate with `python spec/gen.py`
 rtl/         SystemVerilog RTL
-tb/order_table/  Verilator test of the order table against the golden model
+tb/order_table/, tb/price_slot/, tb/price_book/
+             Verilator tests of each block against the golden model
 tb/uvm/      UVM testbench (Vivado xsim), golden model linked via DPI-C
 formal/      SymbiYosys assertion harness for the book core
 golden/      C++ golden model (git submodule, pinned)
@@ -97,12 +99,15 @@ The scoreboard is a byte diff with the hardware cycle counters (`t_arrive`,
 `t_commit`) masked out. Deep-book state, which the wire no longer carries, is
 compared memory by memory in simulation.
 
-The order table is checked against the golden model's lookup code with
-Verilator, using directed corner cases and random traffic:
+The order table and price book blocks are checked against the golden model's
+own code with Verilator, using directed corner cases and random traffic. Price
+to slot is checked for every price in the window:
 
 ```bash
 make -C tb/order_table                  # seed 1
 make -C tb/order_table SEED=7 ROUNDS=200
+make -C tb/price_slot
+make -C tb/price_book
 ```
 
 The v2 book core was verified with a UVM testbench in `tb/uvm/`, run on Vivado

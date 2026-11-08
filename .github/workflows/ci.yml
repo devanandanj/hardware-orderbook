@@ -53,6 +53,7 @@ jobs:
       - run: make -C tb/price_book
       - run: make -C tb/book
       - run: make -C tb/ingress
+      - run: make -C tb/egress
 
   verilog:
     name: generated Verilog for ISE

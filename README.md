@@ -29,7 +29,7 @@ is in progress.
 | `rtl/price_slot.sv`, `rtl/price_book.sv` | Done, tested against golden in `tb/price_slot/` and `tb/price_book/`; timing not yet checked |
 | `rtl/book.sv` (book FSM) | Done, tested against golden in `tb/book/`; control properties proved in `formal/`; timing not yet checked |
 | `rtl/ingress.sv` (Mold/ITCH ingress) | Done, tested against golden's parser and the spec's sequence rules in `tb/ingress/`; timing not yet checked |
-| Snapshot egress | Not started |
+| `rtl/egress.sv`, `rtl/async_fifo.sv` (snapshot egress) | Done, tested against golden's snapshot encoder in `tb/egress/` across unrelated clock ratios and a full FIFO; timing not yet checked |
 | Synthesis | Generated Verilog tested in simulation; no ISE run yet, so XST acceptance, BRAM inference and timing are unconfirmed |
 | `formal/` | Proves the book FSM's control properties at a small geometry |
 | `tb/uvm/` | Written for the v2 core, which is removed; needs porting to v3 |
@@ -43,7 +43,7 @@ spec/        wire-format single source of truth + code generator
   generated/   DO NOT EDIT -- regenerate with `python spec/gen.py`
 rtl/         SystemVerilog RTL
 synth/       SystemVerilog to Verilog conversion for ISE
-tb/order_table/, tb/price_slot/, tb/price_book/, tb/book/, tb/ingress/
+tb/order_table/, tb/price_slot/, tb/price_book/, tb/book/, tb/ingress/, tb/egress/
              Verilator tests of each block against the golden model
 tb/uvm/      UVM testbench (Vivado xsim), golden model linked via DPI-C
 formal/      SymbiYosys proof of the book FSM, at a small geometry
@@ -113,6 +113,7 @@ make -C tb/price_slot
 make -C tb/price_book
 make -C tb/book
 make -C tb/ingress
+make -C tb/egress
 make -C tb/ingress replay MOLD=day.mold LOCATE=13   # a real day, via golden/tools/itch_to_mold.py
 ```
 

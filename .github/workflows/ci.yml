@@ -35,6 +35,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: YosysHQ/setup-oss-cad-suite@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          version: '2026-10-25'   # the build formal/ was checked with locally
       - run: make -C formal prove cover
 
   rtl_units:

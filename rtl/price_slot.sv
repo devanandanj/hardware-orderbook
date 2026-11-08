@@ -10,13 +10,10 @@
 
 `default_nettype none
 
-// slot = (price - base) / TICK + CENTER, as golden's PriceToSlot. Fixed
-// 3-cycle latency, one request per cycle. rsp_slot means nothing unless
-// rsp_ok: the price is on the tick grid and inside the slot window.
 module price_slot (
     input  logic                    clk,
 
-    input  logic [31:0]             base_price,    // session register
+    input  logic [31:0]             base_price,
     input  logic                    req_valid,
     input  logic [31:0]             req_price,
 
@@ -29,8 +26,6 @@ module price_slot (
     localparam int SLOT_W = `BOOK_SLOT_W;
     localparam int D_W    = $clog2(`BOOK_SLOTS * TICK);
 
-    // d = price - (base - CENTER*TICK) makes the window 0 <= d < SLOTS*TICK,
-    // and then slot is simply d / TICK.
     localparam logic [33:0] OFFSET = `BOOK_SLOT_CENTER * TICK;
     localparam logic [33:0] WINDOW = `BOOK_SLOTS * TICK;
 

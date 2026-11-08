@@ -1,17 +1,3 @@
-// tb.cpp -- rtl/book.sv against golden's ApplyCommand.
-//
-// Every command is applied to both. After each done the testbench checks:
-//   - the status bits against golden's Outcome;
-//   - every table, CAM and level write, in order, against golden's
-//     WriteLog (the RTL's write ports are tapped, so this covers memory
-//     contents too);
-//   - the BBO against golden's price books;
-//   - the cycles from accept to done against the arrival budget.
-//
-// Contract the RTL is held to:
-//   - one command at a time, accepted only while cmd_ready;
-//   - exactly one done per command, none at any other time;
-//   - after rst, cmd_ready rises within SLOTS + INIT_SLACK cycles.
 
 #include <algorithm>
 #include <cstdio>
@@ -27,8 +13,6 @@
 #include "command.h"
 #include "snapshot.h"
 
-// Cycles each command takes to arrive at one byte a clock: its ITCH length
-// plus the 2-byte Mold length prefix. The book must finish within it.
 static uint32_t Budget(char type) {
 	switch (type) {
 	case 'A': return 38;
@@ -53,7 +37,6 @@ static bool inCommand;
 static std::vector<WriteRecord> writes;
 static uint32_t worst[256];
 
-// Reached-state counters; a run that misses one proves nothing about it.
 static uint64_t covInsert, covDropped, covRejected, covUnknown, covPartial, covFull,
                 covDelete, covReplace, covReplaceDropped, covReplaceRejected,
                 covReplaceSameSet, covReplaceSameSlot, covCam, covOther, covEmptied;
@@ -69,7 +52,6 @@ static uint64_t Bits(const VlWide<4>& w, int lo, int n) {
 	return v;
 }
 
-// Writes the RTL presents this cycle, table before level as in golden.
 static void Capture() {
 	if (root->book__DOT__tw_valid) {
 		const VlWide<4>& e = root->book__DOT__tw_entry;
@@ -223,8 +205,6 @@ static void Reset(Price base) {
 	ResetBook(&gold, base);
 }
 
-// ---- Command builders ----
-
 static Price At(int32_t ticks) { return gold.basePrice + (Price)(ticks * (int32_t)PRICE_TICK); }
 
 static void Add(OrderId orn, Side side, Price price, Quantity q) {
@@ -239,76 +219,70 @@ static void Replace(OrderId orn, OrderId neu, Price price, Quantity q) {
 // Same set as orn: flipping bit k and bit k+HASH_W cancels in the fold.
 static OrderId Twin(OrderId orn, uint32_t k) { return orn ^ ((uint64_t)k * ((1u << HASH_W) | 1u)); }
 
-// ---- Directed ----
-
 static void TestBasic() {
 	Reset(1000000);
 	Add(1, Side::Buy, At(-1), 100);
 	Add(2, Side::Sell, At(1), 200);
 	Add(3, Side::Buy, At(-1), 50);
-	Reduce('X', 1, 30);              // partial
-	Reduce('E', 3, 50);              // exactly all
-	Reduce('C', 2, 500);             // more than all
-	Delete(1);                       // bids empty
-	Delete(1);                       // unknown
-	Reduce('E', 99, 1);              // unknown
-	Replace(99, 100, At(0), 1);      // unknown
+	Reduce('X', 1, 30);
+	Reduce('E', 3, 50);
+	Reduce('C', 2, 500);
+	Delete(1);
+	Delete(1);
+	Reduce('E', 99, 1);
+	Replace(99, 100, At(0), 1);
 	Apply(Command{'S', Side::Buy, 5, 6, 7, 8});
 	Apply(Command{'F', Side::Sell, 7, 0, 10, At(3)});
 	Delete(7);
 }
 
-// U onto the same level, the same set, and the same entry the old order held.
 static void TestReplace() {
 	Reset(5000000);
 	Add(10, Side::Sell, At(4), 100);
-	Replace(10, 11, At(4), 70);               // level empties, refills
+	Replace(10, 11, At(4), 70);
 	covReplaceSameSlot++;
-	Replace(11, Twin(11, 5), At(4), 60);      // same set, reuses the way
+	Replace(11, Twin(11, 5), At(4), 60);
 	covReplaceSameSet++;
 	Add(20, Side::Buy, At(-2), 5);
 	Add(21, Side::Buy, At(-2), 5);
-	Replace(20, 22, At(-3), 9);               // best level loses one order
-	Replace(21, 23, At(-2) + 1, 9);           // off tick: rejected, old gone
-	Replace(22, 24, At(-9000), 9);            // out of window: rejected
-	Add(30, Side::Buy, 0, 1);                 // price below the window
+	Replace(20, 22, At(-3), 9);
+	Replace(21, 23, At(-2) + 1, 9);
+	Replace(22, 24, At(-9000), 9);
+	Add(30, Side::Buy, 0, 1);
 	Add(31, Side::Buy, 0xFFFFFFFF, 1);
 }
 
-// Fill one set and the whole CAM, then free and reuse entries.
 static void TestFull() {
 	Reset(2000000);
 	const OrderId base = 0x123456789ABCDEFull;
 	const uint32_t n = WAYS + CAM_DEPTH;
 	for (uint32_t k = 0; k < n; k++) Add(Twin(base, k), (Side)(k & 1), At((int32_t)k - 5), k + 1);
-	Add(Twin(base, n), Side::Buy, At(0), 1);              // dropped
-	Replace(Twin(base, 0), Twin(base, n + 1), At(0), 3);  // reuses way 0
-	Add(Twin(base, n + 2), Side::Buy, At(0), 1);          // dropped again
-	Delete(Twin(base, WAYS + 3));                         // frees a CAM entry
-	Replace(Twin(base, 1), Twin(base, n + 3), At(1), 3);  // way 1 freed then reused
-	Add(Twin(base, n + 4), Side::Sell, At(2), 4);         // takes the CAM entry
+	Add(Twin(base, n), Side::Buy, At(0), 1);
+	Replace(Twin(base, 0), Twin(base, n + 1), At(0), 3);
+	Add(Twin(base, n + 2), Side::Buy, At(0), 1);
+	Delete(Twin(base, WAYS + 3));
+	Replace(Twin(base, 1), Twin(base, n + 3), At(1), 3);
+	Add(Twin(base, n + 4), Side::Sell, At(2), 4);
 	for (uint32_t k = 0; k < n + 5; k++) Delete(Twin(base, k));
 }
 
 static void TestZeroShares() {
 	Reset(3000000);
 	Add(40, Side::Buy, At(0), 0);
-	Reduce('X', 40, 0);              // 0 >= 0 removes it
+	Reduce('X', 40, 0);
 	Add(41, Side::Sell, At(0), 5);
-	Reduce('X', 41, 0);              // reduce by nothing
+	Reduce('X', 41, 0);
 	Replace(41, 42, At(0), 0);
 }
 
 static void TestEnds() {
-	Reset(100 * SLOT_CENTER);        // window starts at price 0
+	Reset(100 * SLOT_CENTER);
 	Add(50, Side::Buy, 0, 1);
 	Add(51, Side::Sell, At(SLOTS - SLOT_CENTER - 1), 1);
-	Add(52, Side::Sell, At(SLOTS - SLOT_CENTER), 1);   // one past the top
+	Add(52, Side::Sell, At(SLOTS - SLOT_CENTER), 1);
 	Delete(50);
 	Delete(51);
 }
-
-// ---- Random ----
 
 static void Round(bool hot) {
 	Reset((Price)(rng() % 400000) * PRICE_TICK);
@@ -327,7 +301,6 @@ static void Round(bool hot) {
 		if (r < 98) return At((int32_t)(rng() % 2 ? SLOTS : -(int32_t)SLOTS));
 		return (Price)rng();
 	};
-	// A live ORN, dropping ones golden no longer holds.
 	auto pick = [&](OrderId* orn) -> bool {
 		while (!live.empty()) {
 			const size_t i = rng() % live.size();

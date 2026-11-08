@@ -13,24 +13,22 @@
 module order_table (
     input  logic                    clk,
     input  logic                    rst,
-    output logic                    ready,         // low during the post-reset clear
+    output logic                    ready,
 
-    // Lookup: fixed 2-cycle latency, no backpressure
     input  logic                    req_valid,
     input  logic [63:0]             req_orn,
     output logic                    rsp_valid,
     output logic [`BOOK_HASH_W-1:0] rsp_set,
 
-    output logic                    rsp_hit,       // TableFind: ways, then CAM
+    output logic                    rsp_hit,
     output logic                    rsp_hit_cam,
-    output logic [3:0]              rsp_hit_idx,   // way or CAM entry
+    output logic [3:0]              rsp_hit_idx,
     output book_pkg::entry_t        rsp_hit_entry,
 
-    output logic                    rsp_free,      // TableFindFree: empty way, then CAM
+    output logic                    rsp_free,
     output logic                    rsp_free_cam,
     output logic [3:0]              rsp_free_idx,
 
-    // Write: the book FSM supplies the location and the whole entry
     input  logic                    wr_valid,
     input  logic                    wr_cam,
     input  logic [`BOOK_HASH_W-1:0] wr_set,
@@ -44,7 +42,6 @@ module order_table (
     localparam int CAM_N   = `BOOK_CAM_DEPTH;
     localparam int ENTRY_W = `BOOK_ENTRY_W;
 
-    // XOR-fold: ORN bit i goes into set bit i % HASH_W, as golden's HashOrn.
     function automatic logic [HASH_W-1:0] hash(input logic [63:0] orn);
         hash = '0;
         for (int i = 0; i < 64; i++) hash[i % HASH_W] ^= orn[i];
@@ -63,10 +60,6 @@ module order_table (
         is_free = !e[VALID];
     endfunction
 
-    // ---------------------------------------------------------------
-    // Post-reset clear: one set per cycle, through each bank's single
-    // write port. Writes and lookups wait for ready.
-    // ---------------------------------------------------------------
     logic              clearing;
     logic [HASH_W-1:0] clear_set;
 
@@ -84,9 +77,6 @@ module order_table (
 
     wire wr_ok = wr_valid && !clearing;
 
-    // ---------------------------------------------------------------
-    // Stage 1: read all ways of the set. One BRAM bank per way.
-    // ---------------------------------------------------------------
     wire [HASH_W-1:0] req_set = hash(req_orn);
 
     logic              s1_valid;
@@ -99,7 +89,6 @@ module order_table (
         s1_set   <= req_set;
     end
 
-    // Flat, sliced with +: -- Yosys has no multi-dimensional packed arrays.
     logic [WAYS*ENTRY_W-1:0] way_rd;
     logic [WAYS-1:0]         way_hit;
     logic [WAYS-1:0]         way_free;
@@ -125,9 +114,6 @@ module order_table (
         end
     endgenerate
 
-    // ---------------------------------------------------------------
-    // Overflow CAM, shared by all sets, compared in stage 2.
-    // ---------------------------------------------------------------
     logic [CAM_N*ENTRY_W-1:0] cam;
     logic [CAM_N-1:0]         cam_hit;
     logic [CAM_N-1:0]         cam_free;
@@ -145,10 +131,6 @@ module order_table (
         end
     endgenerate
 
-    // ---------------------------------------------------------------
-    // Stage 2: pick the winners. Ways beat the CAM and low indices beat
-    // high ones, so scan backwards and let the last match stand.
-    // ---------------------------------------------------------------
     logic             hit, hit_cam, free, free_cam;
     logic [3:0]       hit_idx, free_idx;
     book_pkg::entry_t hit_entry;

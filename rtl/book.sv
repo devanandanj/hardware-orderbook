@@ -10,26 +10,17 @@
 
 `default_nettype none
 
-// Applies one book command at a time to the order table and the two price
-// books, as golden's ApplyCommand:
-//   A/F      insert: price check, then a free slot, then entry and level
-//   E/C/X    reduce by shares; reducing to zero or below removes the order
-//   D        remove
-//   U        remove the old order, then insert the new ORN on its side
-//   other    nothing, status 0
-// done pulses once per accepted command, after both price books have
-// settled, so the status bits and the BBO are valid with it.
 module book (
     input logic        clk,
     input logic        rst,
-    input logic [31:0] base_price, // session register
+    input logic [31:0] base_price,
 
     output logic        cmd_ready,
     input  logic        cmd_valid,
-    input  logic [ 7:0] cmd_type,     // ITCH message type
-    input  logic        cmd_side,     // 1 = sell, A/F only
+    input  logic [ 7:0] cmd_type,
+    input  logic        cmd_side,
     input  logic [63:0] cmd_orn,
-    input  logic [63:0] cmd_new_orn,  // U only
+    input  logic [63:0] cmd_new_orn,
     input  logic [31:0] cmd_shares,
     input  logic [31:0] cmd_price,
 
@@ -53,23 +44,21 @@ module book (
 
   localparam logic [3:0] S_INIT   = 4'd0;
   localparam logic [3:0] S_IDLE   = 4'd1;
-  localparam logic [3:0] S_LOOK   = 4'd2;   // wait for the table lookup
-  localparam logic [3:0] S_REM_RD = 4'd3;   // read the order's level
-  localparam logic [3:0] S_REM_WR = 4'd4;   // write entry and level
-  localparam logic [3:0] S_LOOK2  = 4'd5;   // U: look up the new ORN
-  localparam logic [3:0] S_INS    = 4'd6;   // check price and room, read level
-  localparam logic [3:0] S_INS_WR = 4'd7;   // write entry and level
-  localparam logic [3:0] S_SETTLE = 4'd8;   // wait for both price books
+  localparam logic [3:0] S_LOOK   = 4'd2;
+  localparam logic [3:0] S_REM_RD = 4'd3;
+  localparam logic [3:0] S_REM_WR = 4'd4;
+  localparam logic [3:0] S_LOOK2  = 4'd5;
+  localparam logic [3:0] S_INS    = 4'd6;
+  localparam logic [3:0] S_INS_WR = 4'd7;
+  localparam logic [3:0] S_SETTLE = 4'd8;
 
   logic [3:0] state;
 
-  // Latched command. c_side is the insert side: the command's for A/F,
-  // the removed order's for U.
   logic [7:0] c_type;
   logic       c_side;
   logic [63:0] c_orn, c_new_orn;
   logic [31:0] c_shares;
-  logic phase2;  // U's insert half
+  logic phase2;
 
   wire is_insert = c_type == "A" || c_type == "F" || phase2;
 
@@ -80,9 +69,6 @@ module book (
 
   assign cmd_ready = state == S_IDLE;
 
-  // ---------------------------------------------------------------
-  // Order table
-  // ---------------------------------------------------------------
   logic ot_ready, ot_rsp_valid;
   logic [HASH_W-1:0] ot_rsp_set;
   logic ot_rsp_hit, ot_rsp_hit_cam, ot_rsp_free, ot_rsp_free_cam;
@@ -92,7 +78,6 @@ module book (
   wire                     ot_req_valid = (accept && is_book) || state == S_LOOK2;
   wire              [63:0] ot_req_orn = state == S_LOOK2 ? c_new_orn : cmd_orn;
 
-  // The one table write port; tb/book taps tw_* and lw_*.
   logic tw_valid, tw_cam;
   logic             [HASH_W-1:0] tw_set;
   logic             [       3:0] tw_idx;
@@ -120,7 +105,6 @@ module book (
       .wr_entry     (tw_entry)
   );
 
-  // Last lookup, held for the states after S_LOOK.
   logic [HASH_W-1:0] lk_set;
   logic lk_hit_cam, lk_free, lk_free_cam;
   logic [3:0] lk_hit_idx, lk_free_idx;
@@ -138,10 +122,6 @@ module book (
     end
   end
 
-  // ---------------------------------------------------------------
-  // Price to slot, started at accept for every command; only inserts
-  // use the answer. One request in flight at most.
-  // ---------------------------------------------------------------
   logic ps_rsp_valid, ps_rsp_ok;
   logic [SLOT_W-1:0] ps_rsp_slot;
   logic ps_pending, sl_ok;
@@ -168,10 +148,6 @@ module book (
     end
   end
 
-  // ---------------------------------------------------------------
-  // Price books. One level read and one level write at a time, shared
-  // by both sides (side 1 = ask).
-  // ---------------------------------------------------------------
   logic rd_go, rd_side;
   logic [SLOT_W-1:0] rd_slot;
   logic lw_valid, lw_side;
@@ -225,14 +201,9 @@ module book (
       .best_orders (ask_orders)
   );
 
-  // In S_REM_WR / S_INS_WR this is the read issued the cycle before.
   wire [31:0] lvl_shares = lw_side ? ask_rd_shares : bid_rd_shares;
   wire [15:0] lvl_orders = lw_side ? ask_rd_orders : bid_rd_orders;
 
-  // ---------------------------------------------------------------
-  // Datapath: what each state presents to the memories.
-  // ---------------------------------------------------------------
-  // U carries the new order's shares, not an amount to take off.
   wire        full_remove = c_type == "D" || c_type == "U" || c_shares >= lk_entry.shares;
   wire        rem_ready = lk_entry.side ? ask_ready : bid_ready;
   wire        ins_ready = c_side ? ask_ready : bid_ready;
@@ -285,9 +256,6 @@ module book (
     end
   end
 
-  // ---------------------------------------------------------------
-  // Control
-  // ---------------------------------------------------------------
   always_ff @(posedge clk) begin
     if (rst) begin
       state             <= S_INIT;
@@ -332,14 +300,11 @@ module book (
           state  <= c_type == "U" ? S_LOOK2 : S_SETTLE;
         end
 
-        // The remove's table write landed last cycle, so this
-        // lookup sees it.
         S_LOOK2: begin
           phase2 <= 1'b1;
           state  <= S_LOOK;
         end
 
-        // Price first, then room, as golden's InsertOrder.
         S_INS:
         if (!ps_pending) begin
           if (!sl_ok) begin
@@ -369,20 +334,15 @@ module book (
   end
 
 `ifdef FORMAL
-    // ---------------------------------------------------------------
-    // Properties, proved by formal/ at a small geometry. Here rather than
-    // in the wrapper because they need internal signals, which Yosys
-    // cannot reach from outside. sv2v, ISE and Verilator never see this.
-    // ---------------------------------------------------------------
-    logic [2:0] f_age = '0;           // cycles since start, saturating
-    logic       f_ot1, f_ot2;         // table lookup 1 and 2 edges ago
-    logic       f_ps1, f_ps2, f_ps3;  // price_slot request 1..3 edges ago
-    logic       f_busy;               // accepted, done not yet seen
-    logic [5:0] f_cycles;             // since accept
-    logic       f_had_bid = 1'b0;     // the bid side has been occupied
-    logic       f_wrote;              // this command has written a level
-    logic [4:0] f_lw_age;             // cycles since the last level write
-    logic       f_lw_side;            // and the side it went to
+    logic [2:0] f_age = '0;
+    logic       f_ot1, f_ot2;
+    logic       f_ps1, f_ps2, f_ps3;
+    logic       f_busy;
+    logic [5:0] f_cycles;
+    logic       f_had_bid = 1'b0;
+    logic       f_wrote;
+    logic [4:0] f_lw_age;
+    logic       f_lw_side;
 
     always_ff @(posedge clk) begin
         if (f_age != 3'd7) f_age <= f_age + 3'd1;
@@ -401,8 +361,6 @@ module book (
         f_cycles <= accept ? 6'd1 : f_cycles + {5'd0, f_busy && f_cycles != 6'd63};
     end
 
-    // Cycles a message takes to arrive, one byte a clock with its 2-byte
-    // Mold length; the book must be done within it (tb/book's Budget).
     function automatic logic [5:0] budget(input logic [7:0] t);
         case (t)
             "A": budget = 6'd38;
@@ -416,27 +374,23 @@ module book (
         endcase
     endfunction
 
-    wire f_run    = f_age != 3'd0;  // past the reset cycle
-    wire f_pipe   = f_age > 3'd3;   // and past the unreset pipelines
+    wire f_run    = f_age != 3'd0;
+    wire f_pipe   = f_age > 3'd3;
     wire f_active = state != S_IDLE && state != S_INIT;
     wire f_add    = c_type == "A" || c_type == "F";
     wire f_rem    = c_type == "E" || c_type == "C" || c_type == "X" ||
                     c_type == "D" || c_type == "U";
 
     always_comb begin
-        // Reset is applied once, at the start.
         assume (rst == (f_age == 3'd0));
 
         if (f_pipe) begin
-            // Sub-block pipelines, pinned to their requests.
             assert (ot_rsp_valid == f_ot2);
             assert (ps_rsp_valid == f_ps3);
             assert (ps_pending == (f_ps1 || f_ps2 || f_ps3));
         end
 
         if (f_run) begin
-            // The price books clear for SLOTS cycles after reset, so the
-            // unpinned cycles above are always spent in S_INIT.
             if (!f_pipe) assert (state == S_INIT);
             assert (state <= S_SETTLE);
             if (state != S_INIT) assert (ot_ready);
@@ -444,16 +398,10 @@ module book (
             if (state == S_IDLE) assert (!ps_pending && !f_ot1 && !f_ot2 && bid_ready && ask_ready);
             if (state == S_INIT) assert (!f_busy && !done);
 
-            // Handshake: one done per command, busy in between.
             assert (f_busy == (f_active || done));
             if (done) assert (state == S_IDLE);
             if (f_busy) assert (f_cycles <= budget(c_type));
 
-            // Where each state sits in the command's timeline, so k-induction
-            // closes in a few steps instead of a whole command. Cycle k of a
-            // command is f_cycles == k; the remove writes its level at k = 4.
-            // A price book is ready again within 5 cycles of a write.
-            // A command writes one side only; the other stays ready.
             if (f_active && !f_wrote) assert (bid_ready && ask_ready);
             if (f_active && f_wrote)
                 assert ((f_lw_side ? bid_ready : ask_ready) &&
@@ -465,7 +413,6 @@ module book (
                 if (phase2) assert (c_type == "U" && f_wrote);
                 if (phase2 && state != S_SETTLE) assert (f_lw_age == f_cycles - 6'd4);
             end
-            // Which commands reach which states.
             if (f_active && state != S_SETTLE) assert (f_add || f_rem);
             if (state == S_REM_RD || state == S_REM_WR) assert (f_rem && !phase2);
             if (state == S_LOOK2) assert (c_type == "U" && !phase2);
@@ -492,13 +439,10 @@ module book (
             endcase
             if (done) assert (f_cycles <= 6'd18);
 
-            // Memory rules of the blocks below.
             if (tw_valid) assert (!ot_req_valid && !f_ot1);
             if (rd_go)    assert (rd_side ? ask_ready : bid_ready);
             if (lw_valid) assert (lw_side ? ask_ready : bid_ready);
 
-            // Status: one cause, from a command that can raise it, decided
-            // only on the way into S_SETTLE.
             if (f_active && state != S_SETTLE)
                 assert (!order_dropped && !price_rejected && !unknown_order_ref);
             assert ($countones({order_dropped, price_rejected, unknown_order_ref}) <= 1);
@@ -508,13 +452,11 @@ module book (
             if (order_dropped || price_rejected)
                 assert (c_type == "A" || c_type == "F" || c_type == "U");
 
-            // An empty side reports zeros.
             if (!bid_valid) assert (bid_slot == '0 && bid_shares == '0 && bid_orders == '0);
             if (!ask_valid) assert (ask_slot == '0 && ask_shares == '0 && ask_orders == '0);
         end
     end
 
-    // Reachability, so no property above holds only vacuously.
     always_comb if (f_run && done) begin
         cover (c_type == "A" && !order_dropped && !price_rejected);
         cover (c_type == "A" && order_dropped);
@@ -526,7 +468,7 @@ module book (
         cover (c_type == "U" && price_rejected);
         cover (c_type == "S");
         cover (c_type == "A" && bid_valid && ask_valid);
-        cover (f_had_bid && !bid_valid);           // the bid side emptied
+        cover (f_had_bid && !bid_valid);
     end
 `endif
 

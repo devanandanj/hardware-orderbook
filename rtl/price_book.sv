@@ -10,13 +10,6 @@
 
 `default_nettype none
 
-// One side's price levels and its best occupied slot: highest for bids,
-// lowest for asks. Semantics follow golden's PriceBookNoteWrite. The book
-// FSM owns the arithmetic: it reads a level, then writes the new value.
-//
-// One operation at a time, and only while ready is high. A read responds
-// on the next cycle. After a write, ready drops until occupancy and the
-// best level are up to date, and best_* is valid again when it returns.
 module price_book #(
     parameter bit SELL = 0
 ) (
@@ -59,7 +52,6 @@ module price_book #(
     localparam logic [2:0] S_LVL   = 3'd5;
     localparam logic [2:0] S_LOAD  = 3'd6;
 
-    // The most competitive set bit: highest for bids, lowest for asks.
     function automatic logic [COL_W-1:0] pick(input logic [COLS-1:0] v);
         pick = '0;
         for (int i = 0; i < COLS; i++)
@@ -81,14 +73,10 @@ module price_book #(
 
     logic [SLOT_W-1:0] clear_slot;
 
-    // Write latched for the occupancy update.
     logic [SLOT_W-1:0] p_slot;
     logic              p_occupied;
     logic              p_rescan;
 
-    // ---------------------------------------------------------------
-    // Levels. Plain vector memory, one read and one write port.
-    // ---------------------------------------------------------------
     logic [LEVEL_W-1:0] level [0:(1<<SLOT_W)-1];
     logic [LEVEL_W-1:0] level_q;
 
@@ -105,9 +93,6 @@ module price_book #(
     assign rd_shares = level_q[LEVEL_W-1:ORDER_W];
     assign rd_orders = level_q[ORDER_W-1:0];
 
-    // ---------------------------------------------------------------
-    // Occupancy bitmap.
-    // ---------------------------------------------------------------
     logic [COLS-1:0]  occ [0:COLS-1];
     logic [COLS-1:0]  occ_q;
     logic [COLS-1:0]  summary;
@@ -133,11 +118,6 @@ module price_book #(
         occ_q <= occ[occ_raddr];
     end
 
-    // ---------------------------------------------------------------
-    // Control. Golden walks away from the old best to find the next one,
-    // but nothing occupied lies beyond the best slot, so the most competitive
-    // occupied slot overall is the same answer.
-    // ---------------------------------------------------------------
     always_ff @(posedge clk) begin
         if (rst) begin
             state        <= S_CLEAR;

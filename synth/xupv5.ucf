@@ -1,0 +1,54 @@
+CONFIG PART = XC5VLX110T-FF1136-1;
+
+NET "sys_clk"     LOC = "AH15" | IOSTANDARD = LVCMOS33;
+NET "cpu_reset_n" LOC = "E9"   | IOSTANDARD = LVCMOS33 | TIG;
+
+NET "phy_rxclk"   LOC = "H17"  | IOSTANDARD = LVCMOS25;
+NET "phy_rxd<0>"  LOC = "A33"  | IOSTANDARD = LVCMOS25;
+NET "phy_rxd<1>"  LOC = "B33"  | IOSTANDARD = LVCMOS25;
+NET "phy_rxd<2>"  LOC = "C33"  | IOSTANDARD = LVCMOS25;
+NET "phy_rxd<3>"  LOC = "C32"  | IOSTANDARD = LVCMOS25;
+NET "phy_rxd<4>"  LOC = "D32"  | IOSTANDARD = LVCMOS25;
+NET "phy_rxd<5>"  LOC = "C34"  | IOSTANDARD = LVCMOS25;
+NET "phy_rxd<6>"  LOC = "D34"  | IOSTANDARD = LVCMOS25;
+NET "phy_rxd<7>"  LOC = "F33"  | IOSTANDARD = LVCMOS25;
+NET "phy_rxdv"    LOC = "E32"  | IOSTANDARD = LVCMOS25;
+NET "phy_rxer"    LOC = "E33"  | IOSTANDARD = LVCMOS25;
+
+NET "phy_gtxclk"  LOC = "J16"  | IOSTANDARD = LVCMOS25 | SLEW = FAST;
+NET "phy_txd<0>"  LOC = "AF11" | IOSTANDARD = LVCMOS25 | SLEW = FAST;
+NET "phy_txd<1>"  LOC = "AE11" | IOSTANDARD = LVCMOS25 | SLEW = FAST;
+NET "phy_txd<2>"  LOC = "AH9"  | IOSTANDARD = LVCMOS25 | SLEW = FAST;
+NET "phy_txd<3>"  LOC = "AH10" | IOSTANDARD = LVCMOS25 | SLEW = FAST;
+NET "phy_txd<4>"  LOC = "AG8"  | IOSTANDARD = LVCMOS25 | SLEW = FAST;
+NET "phy_txd<5>"  LOC = "AH8"  | IOSTANDARD = LVCMOS25 | SLEW = FAST;
+NET "phy_txd<6>"  LOC = "AG10" | IOSTANDARD = LVCMOS25 | SLEW = FAST;
+NET "phy_txd<7>"  LOC = "AG11" | IOSTANDARD = LVCMOS25 | SLEW = FAST;
+NET "phy_txen"    LOC = "AJ10" | IOSTANDARD = LVCMOS25 | SLEW = FAST;
+NET "phy_txer"    LOC = "AJ9"  | IOSTANDARD = LVCMOS25 | SLEW = FAST;
+NET "phy_reset_n" LOC = "J14"  | IOSTANDARD = LVCMOS25 | TIG;
+
+NET "led<0>" LOC = "H18"  | IOSTANDARD = LVCMOS25;
+NET "led<1>" LOC = "L18"  | IOSTANDARD = LVCMOS25;
+NET "led<2>" LOC = "G15"  | IOSTANDARD = LVCMOS25;
+NET "led<3>" LOC = "AD26" | IOSTANDARD = LVCMOS18;
+NET "led<4>" LOC = "G16"  | IOSTANDARD = LVCMOS25;
+NET "led<5>" LOC = "AD25" | IOSTANDARD = LVCMOS18;
+NET "led<6>" LOC = "AD24" | IOSTANDARD = LVCMOS18;
+NET "led<7>" LOC = "AE24" | IOSTANDARD = LVCMOS18;
+NET "led<*>" SLEW = SLOW | TIG;
+
+NET "sys_clk" TNM_NET = "sys_clk";
+TIMESPEC "TS_sys_clk" = PERIOD "sys_clk" 10 ns HIGH 50%;
+
+NET "phy_rxclk" TNM_NET = "rx_clk";
+TIMESPEC "TS_rx_clk" = PERIOD "rx_clk" 8 ns HIGH 50%;
+
+NET "gtx_clk" TNM_NET = "gtx_clk";
+TIMESPEC "TS_rx_to_gtx" = FROM "rx_clk" TO "gtx_clk" 8 ns DATAPATHONLY;
+TIMESPEC "TS_gtx_to_rx" = FROM "gtx_clk" TO "rx_clk" 8 ns DATAPATHONLY;
+
+NET "phy_rxd<*>" TNM = "gmii_in";
+NET "phy_rxdv"   TNM = "gmii_in";
+NET "phy_rxer"   TNM = "gmii_in";
+TIMEGRP "gmii_in" OFFSET = IN 2.5 ns VALID 3.0 ns BEFORE "phy_rxclk" RISING;

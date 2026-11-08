@@ -54,6 +54,7 @@ jobs:
       - run: make -C tb/book
       - run: make -C tb/ingress
       - run: make -C tb/egress
+      - run: make -C tb/top
 
   verilog:
     name: generated Verilog for ISE

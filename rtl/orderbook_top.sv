@@ -60,8 +60,15 @@ module orderbook_top #(
     else cycle <= cycle + 1'b1;
   end
 
-  logic [7:0] m_data, s_data;
-  logic m_valid, m_eof, m_bad, s_valid, s_last, s_ready;
+  logic [7:0] m_data, m_data_q, s_data;
+  logic m_valid, m_eof, m_bad, m_valid_q, m_eof_q, m_bad_q, s_valid, s_last, s_ready;
+
+  always_ff @(posedge gmii_rx_clk) begin
+    m_data_q  <= m_data;
+    m_valid_q <= m_valid && !rst;
+    m_eof_q   <= m_eof && !rst;
+    m_bad_q   <= m_bad;
+  end
 
   // shortcut: eth_stack has one reset for both clocks, so its transmit side sees rst; split it in the ethernet repo before hardware.
   eth_stack u_eth (
@@ -98,10 +105,10 @@ module orderbook_top #(
       .cfg_filter_en(FILTER_EN),
       .cfg_locate   (LOCATE),
       .cycle,
-      .m_data,
-      .m_valid,
-      .m_eof,
-      .m_bad,
+      .m_data       (m_data_q),
+      .m_valid      (m_valid_q),
+      .m_eof        (m_eof_q),
+      .m_bad        (m_bad_q),
       .cmd_valid,
       .cmd_ready,
       .cmd_type,

@@ -17,7 +17,8 @@ module xupv5_top #(
     parameter logic [15:0] HOST_PORT  = 16'd26401,
     parameter logic        FILTER_EN  = 1'b1,
     parameter logic [15:0] LOCATE     = 16'd1,
-    parameter logic [31:0] BASE_PRICE = 32'd1_000_000
+    parameter logic [31:0] BASE_PRICE = 32'd1_000_000,
+    parameter int          RX_DELAY_TAPS = 30
 ) (
     input logic sys_clk,
     input logic cpu_reset_n,
@@ -36,19 +37,20 @@ module xupv5_top #(
     output logic [7:0] led
 );
 
-  logic pll_fb, pll_clk, pll_locked, gtx_clk, rx_clk_ibuf, gmii_rx_clk;
+  logic pll_fb, pll_clk, pll_ref, pll_locked, gtx_clk, ref_clk, rx_clk_ibuf, gmii_rx_clk;
 
   PLL_BASE #(
       .CLKIN_PERIOD  (10.0),
       .CLKFBOUT_MULT (10),
       .DIVCLK_DIVIDE (1),
-      .CLKOUT0_DIVIDE(8)
+      .CLKOUT0_DIVIDE(8),
+      .CLKOUT1_DIVIDE(5)
   ) u_pll (
       .CLKIN   (sys_clk),
       .CLKFBIN (pll_fb),
       .CLKFBOUT(pll_fb),
       .CLKOUT0 (pll_clk),
-      .CLKOUT1 (),
+      .CLKOUT1 (pll_ref),
       .CLKOUT2 (),
       .CLKOUT3 (),
       .CLKOUT4 (),
@@ -61,6 +63,40 @@ module xupv5_top #(
       .I(pll_clk),
       .O(gtx_clk)
   );
+
+  BUFG u_ref_bufg (
+      .I(pll_ref),
+      .O(ref_clk)
+  );
+
+  IDELAYCTRL u_idelayctrl (
+      .REFCLK(ref_clk),
+      .RST   (!pll_locked),
+      .RDY   ()
+  );
+
+  logic [9:0] rx_pins, rx_delayed;
+  assign rx_pins = {phy_rxer, phy_rxdv, phy_rxd};
+
+  for (genvar i = 0; i < 10; i++) begin : g_rx_delay
+    IODELAY #(
+        .IDELAY_TYPE          ("FIXED"),
+        .IDELAY_VALUE         (RX_DELAY_TAPS),
+        .DELAY_SRC            ("I"),
+        .HIGH_PERFORMANCE_MODE("TRUE"),
+        .REFCLK_FREQUENCY     (200.0)
+    ) u_delay (
+        .IDATAIN(rx_pins[i]),
+        .DATAOUT(rx_delayed[i]),
+        .ODATAIN(1'b0),
+        .DATAIN (1'b0),
+        .T      (1'b1),
+        .C      (1'b0),
+        .CE     (1'b0),
+        .INC    (1'b0),
+        .RST    (1'b0)
+    );
+  end
 
   IBUFG u_rx_ibufg (
       .I(phy_rxclk),
@@ -102,9 +138,9 @@ module xupv5_top #(
   logic gmii_tx_en, gmii_tx_er;
 
   always_ff @(posedge gmii_rx_clk) begin
-    rxd_q  <= phy_rxd;
-    rxdv_q <= phy_rxdv;
-    rxer_q <= phy_rxer;
+    rxd_q  <= rx_delayed[7:0];
+    rxdv_q <= rx_delayed[8];
+    rxer_q <= rx_delayed[9];
   end
 
   always_ff @(posedge gtx_clk) begin

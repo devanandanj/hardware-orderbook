@@ -3,7 +3,7 @@
 // Every price in the slot window, plus a margin either side, for bases
 // across the range, so the reciprocal multiply is checked exhaustively
 // rather than sampled. Requests stream one per cycle with random gaps; the
-// response must land exactly 3 cycles later.
+// response must land exactly 4 cycles later.
 
 #include <array>
 #include <cstdio>
@@ -16,7 +16,7 @@
 
 #include "pricebook.h"
 
-static constexpr int LATENCY = 3;
+static constexpr int LATENCY = 4;
 static constexpr int64_t MARGIN = 1000;
 
 struct Expect {
@@ -62,7 +62,7 @@ static void Tick(uint32_t base, std::optional<Expect> accepted) {
 
 	const std::optional<Expect> due = stages.back();
 	if (dut->rsp_valid != due.has_value())
-		Fail("rsp_valid not exactly 3 cycles after req_valid", base, due ? due->price : 0);
+		Fail("rsp_valid not exactly 4 cycles after req_valid", base, due ? due->price : 0);
 	if (due) Check(*due, base);
 	for (size_t i = stages.size() - 1; i > 0; i--) stages[i] = stages[i - 1];
 	stages[0] = accepted;

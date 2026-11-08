@@ -336,7 +336,7 @@ module book (
 `ifdef FORMAL
     logic [2:0] f_age = '0;
     logic       f_ot1, f_ot2;
-    logic       f_ps1, f_ps2, f_ps3;
+    logic       f_ps1, f_ps2, f_ps3, f_ps4;
     logic       f_busy;
     logic [5:0] f_cycles;
     logic       f_had_bid = 1'b0;
@@ -351,6 +351,7 @@ module book (
         f_ps1 <= accept;
         f_ps2 <= f_ps1;
         f_ps3 <= f_ps2;
+        f_ps4 <= f_ps3;
         if (rst || done) f_busy <= 1'b0;
         if (accept && !rst) f_busy <= 1'b1;
         if (bid_valid && f_age != 3'd0) f_had_bid <= 1'b1;
@@ -375,7 +376,7 @@ module book (
     endfunction
 
     wire f_run    = f_age != 3'd0;
-    wire f_pipe   = f_age > 3'd3;
+    wire f_pipe   = f_age > 3'd4;
     wire f_active = state != S_IDLE && state != S_INIT;
     wire f_add    = c_type == "A" || c_type == "F";
     wire f_rem    = c_type == "E" || c_type == "C" || c_type == "X" ||
@@ -386,8 +387,8 @@ module book (
 
         if (f_pipe) begin
             assert (ot_rsp_valid == f_ot2);
-            assert (ps_rsp_valid == f_ps3);
-            assert (ps_pending == (f_ps1 || f_ps2 || f_ps3));
+            assert (ps_rsp_valid == f_ps4);
+            assert (ps_pending == (f_ps1 || f_ps2 || f_ps3 || f_ps4));
         end
 
         if (f_run) begin
@@ -405,11 +406,12 @@ module book (
             if (f_active && !f_wrote) assert (bid_ready && ask_ready);
             if (f_active && f_wrote)
                 assert ((f_lw_side ? bid_ready : ask_ready) &&
-                        (f_lw_age < 5'd6 || (f_lw_side ? ask_ready : bid_ready)));
+                        (f_lw_age < 5'd9 || (f_lw_side ? ask_ready : bid_ready)));
             if (f_active) begin
                 assert (f_ps1 == (f_cycles == 6'd1));
                 assert (f_ps2 == (f_cycles == 6'd2));
                 assert (f_ps3 == (f_cycles == 6'd3));
+                assert (f_ps4 == (f_cycles == 6'd4));
                 if (phase2) assert (c_type == "U" && f_wrote);
                 if (phase2 && state != S_SETTLE) assert (f_lw_age == f_cycles - 6'd4);
             end
@@ -417,7 +419,7 @@ module book (
             if (state == S_REM_RD || state == S_REM_WR) assert (f_rem && !phase2);
             if (state == S_LOOK2) assert (c_type == "U" && !phase2);
             if ((state == S_INS || state == S_INS_WR) && !phase2) assert (f_add);
-            if (state == S_SETTLE && !f_add && !f_rem) assert (!f_wrote && f_cycles <= 6'd4);
+            if (state == S_SETTLE && !f_add && !f_rem) assert (!f_wrote && f_cycles <= 6'd5);
 
             case (state)
                 S_LOOK: if (!phase2) assert (!f_wrote && f_ot1 == (f_cycles == 6'd1) &&
@@ -427,17 +429,17 @@ module book (
                 S_REM_RD: assert (!f_wrote && f_cycles == 6'd3);
                 S_REM_WR: assert (!f_wrote && f_cycles == 6'd4);
                 S_LOOK2:  assert (f_cycles == 6'd5);
-                S_INS:    if (!phase2) assert (!f_wrote && (f_cycles == 6'd3 || f_cycles == 6'd4));
-                          else         assert (f_cycles >= 6'd8 && f_cycles <= 6'd10);
-                S_INS_WR: assert (phase2 ? f_cycles <= 6'd11 : (!f_wrote && f_cycles == 6'd5));
+                S_INS:    if (!phase2) assert (!f_wrote && f_cycles >= 6'd3 && f_cycles <= 6'd5);
+                          else         assert (f_cycles >= 6'd8 && f_cycles <= 6'd13);
+                S_INS_WR: assert (phase2 ? f_cycles <= 6'd14 : (!f_wrote && f_cycles >= 6'd4 && f_cycles <= 6'd6));
                 S_SETTLE: begin
-                    assert (f_cycles <= 6'd17);
-                    if (f_wrote) assert (f_cycles <= f_lw_age + 6'd11);
-                    else         assert (f_cycles <= 6'd5);
+                    assert (f_cycles <= (phase2 ? 6'd23 : 6'd15));
+                    if (f_wrote) assert (f_lw_age <= 5'd10 && f_cycles <= f_lw_age + (phase2 ? 6'd14 : 6'd6));
+                    else         assert (f_cycles <= 6'd6);
                 end
                 default: ;
             endcase
-            if (done) assert (f_cycles <= 6'd18);
+            if (done) assert (f_cycles <= 6'd24);
 
             if (tw_valid) assert (!ot_req_valid && !f_ot1);
             if (rd_go)    assert (rd_side ? ask_ready : bid_ready);

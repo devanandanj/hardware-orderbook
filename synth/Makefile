@@ -13,9 +13,10 @@ BOOK   := $(addprefix $(ROOT)/rtl/,orderbook_top.sv ingress.sv egress.sv async_f
 ETH    := $(wildcard $(ROOT)/ethernet/rtl/*.sv)
 BOARD  := $(ROOT)/rtl/xupv5_top.sv
 PART   := xc5vlx110t-ff1136-1
+EFFORT ?= std
 INC    := $(ROOT)/rtl/book_pkg.sv $(ROOT)/spec/generated/itch_defs.vh
 
-.PHONY: all check bit clean
+.PHONY: all check timing bit clean
 
 all: build/.stamp
 
@@ -24,6 +25,7 @@ build/.stamp: $(BOOK) $(ETH) $(BOARD) $(INC)
 	$(SV2V) -I$(ROOT)/rtl -I$(ROOT)/spec/generated $(BOOK) -w build
 	$(SV2V) $(ETH) -w build
 	$(SV2V) $(BOARD) -w build/board
+	python3 xst_fix.py build/*.v build/board/*.v
 	touch $@
 
 check: all
@@ -44,15 +46,18 @@ check: all
 	    RTL="$(addprefix $(CURDIR)/build/,book.v order_table.v price_slot.v price_book.v)"
 	$(MAKE) -C $(ROOT)/tb/book clean
 
-bit: all
+timing: all
 	mkdir -p build/ise
 	cd build/ise && ls $(CURDIR)/build/*.v $(CURDIR)/build/board/*.v | sed 's/^/verilog work /' > top.prj
 	cd build/ise && echo "run -ifn top.prj -ifmt mixed -top xupv5_top -p $(PART) -ofn xupv5_top.ngc -opt_mode speed" > top.xst
 	cd build/ise && xst -ifn top.xst
 	cd build/ise && ngdbuild -uc $(CURDIR)/xupv5.ucf -p $(PART) xupv5_top.ngc
-	cd build/ise && map -p $(PART) -o map.ncd xupv5_top.ngd
-	cd build/ise && par -w map.ncd par.ncd
+	cd build/ise && map -p $(PART) -pr b -ol $(EFFORT) -o map.ncd xupv5_top.ngd
+	cd build/ise && par -w -ol $(EFFORT) map.ncd par.ncd
 	cd build/ise && trce -v 10 -u 10 par.ncd map.pcf -o timing.twr
+
+bit: EFFORT = high
+bit: timing
 	cd build/ise && bitgen -w par.ncd xupv5_top.bit
 
 clean:

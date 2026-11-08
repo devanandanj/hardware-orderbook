@@ -26,7 +26,7 @@ wrong -- fix whichever is wrong, do not weaken the property.
 - The engine is bitwuzla. Boolector, the old default, stalls on the multiplier
   in `price_slot`, and yices and z3 take tens of minutes over the covers.
 - `book.sby` tasks:
-  - `prove` -- k-induction, depth 8. A PASS is an unbounded proof. The
+  - `prove` -- k-induction, depth 12. A PASS is an unbounded proof. The
     timeline invariants below keep it shallow; without them the window has
     to span a whole command (46 steps), which takes the solver an hour.
   - `cover` -- witnesses that each interesting outcome is reachable, so no
@@ -78,17 +78,17 @@ CI runs `make prove cover` on every push.
 True from reset, and needed so k-induction does not start from states
 reset never reaches:
 
-- The order table and price_slot respond exactly 2 and 3 cycles after
+- The order table and price_slot respond exactly 2 and 4 cycles after
   their requests, and `ps_pending` matches the price_slot pipeline.
 - The first cycles after reset are spent in `S_INIT`; after it the table
   is out of its clear. In `S_IDLE` nothing is in flight and both price
   books are ready.
 - Timeline: each state is pinned to the cycles since accept at which it
   can occur (`S_REM_RD` at cycle 3, the remove's write at cycle 4, `S_INS`
-  of a replace at 8 to 10, `S_SETTLE` by 17), and to the command types that
+  of a replace at 8 to 13, `S_SETTLE` by 15, or 23 for a replace), and to the command types that
   reach it. Status bits are only set on the way into `S_SETTLE`.
 - A command writes one price book side only. The other side stays ready,
-  and the written side is ready again within 5 cycles of its write.
+  and the written side is ready again within 8 cycles of its write.
 
 ### Coverage witnesses
 

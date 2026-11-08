@@ -25,14 +25,14 @@ is in progress.
 |---|---|
 | `spec/`, `golden/` | v3 |
 | `ethernet/` | Done, simulation only |
-| `rtl/order_table.sv` | Done, tested against golden in `tb/order_table/`; timing not yet checked |
-| `rtl/price_slot.sv`, `rtl/price_book.sv` | Done, tested against golden in `tb/price_slot/` and `tb/price_book/`; timing not yet checked |
-| `rtl/book.sv` (book FSM) | Done, tested against golden in `tb/book/`; control properties proved in `formal/`; timing not yet checked |
-| `rtl/ingress.sv` (Mold/ITCH ingress) | Done, tested against golden's parser and the spec's sequence rules in `tb/ingress/`; timing not yet checked |
-| `rtl/egress.sv`, `rtl/async_fifo.sv` (snapshot egress) | Done, tested against golden's snapshot encoder in `tb/egress/` across unrelated clock ratios and a full FIFO; timing not yet checked |
+| `rtl/order_table.sv` | Done, tested against golden in `tb/order_table/` |
+| `rtl/price_slot.sv`, `rtl/price_book.sv` | Done, tested against golden in `tb/price_slot/` and `tb/price_book/` |
+| `rtl/book.sv` (book FSM) | Done, tested against golden in `tb/book/`; control properties proved in `formal/` |
+| `rtl/ingress.sv` (Mold/ITCH ingress) | Done, tested against golden's parser and the spec's sequence rules in `tb/ingress/` |
+| `rtl/egress.sv`, `rtl/async_fifo.sv` (snapshot egress) | Done, tested against golden's snapshot encoder in `tb/egress/` across unrelated clock ratios and a full FIFO |
 | `rtl/orderbook_top.sv` (full system) | Done, `eth_stack` to ingress to book to egress; tested end to end in `tb/top/` against golden, GMII frames in and out |
-| `rtl/xupv5_top.sv`, `synth/xupv5.ucf` (board) | Written, never built: PLL, PHY reset, GMII I/O registers, status LEDs. Pins from the ML505/XUPV5 schematic |
-| Synthesis | Generated Verilog tested in simulation; `make -C synth bit` runs the ISE flow (XST to bitgen) but has never run, so XST acceptance, BRAM inference and timing are unconfirmed |
+| `rtl/xupv5_top.sv`, `synth/xupv5.ucf` (board) | Builds in ISE, never run on the board: PLL, PHY reset, GMII I/O registers, status LEDs. Pins from the ML505/XUPV5 schematic |
+| Synthesis | ISE 14.7 meets every constraint at 125 MHz (7.965 ns, so only 35 ps of slack); 5,182 LUTs, 4,920 registers, 65 block RAMs, 5 DSPs. Generated Verilog tested in simulation; `make -C synth timing` runs ISE through place and route and timing at standard effort; `make -C synth bit` reruns it at high effort and writes the bitstream |
 | `formal/` | Proves the book FSM's control properties at a small geometry |
 | `tb/uvm/` | Written for the v2 core, which is removed; needs porting to v3 |
 

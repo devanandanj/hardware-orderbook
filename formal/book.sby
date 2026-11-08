@@ -8,7 +8,7 @@ bmc:   mode bmc
 bmc:   depth 30
 # Shallow: the timeline invariants in book.sv make the proof local.
 prove: mode prove
-prove: depth 8
+prove: depth 12
 cover: mode cover
 cover: depth 60
 

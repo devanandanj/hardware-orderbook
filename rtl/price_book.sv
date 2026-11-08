@@ -43,46 +43,66 @@ module price_book #(
     // per row. shortcut: assumes SLOT_W is even, revisit if slot_width is odd.
     localparam int COL_W = SLOT_W / 2;
     localparam int COLS  = 1 << COL_W;
+    localparam int LO_W  = COL_W / 2;
+    localparam int HI_W  = COL_W - LO_W;
+    localparam int LO_N  = 1 << LO_W;
+    localparam int HI_N  = 1 << HI_W;
 
-    localparam logic [2:0] S_IDLE  = 3'd0;
-    localparam logic [2:0] S_CLEAR = 3'd1;
-    localparam logic [2:0] S_UPD   = 3'd2;
-    localparam logic [2:0] S_SCAN  = 3'd3;
-    localparam logic [2:0] S_PICK  = 3'd4;
-    localparam logic [2:0] S_LVL   = 3'd5;
-    localparam logic [2:0] S_LOAD  = 3'd6;
+    localparam logic [3:0] S_IDLE  = 4'd0;
+    localparam logic [3:0] S_CLEAR = 4'd1;
+    localparam logic [3:0] S_WR    = 4'd2;
+    localparam logic [3:0] S_UPD   = 4'd3;
+    localparam logic [3:0] S_SCAN  = 4'd4;
+    localparam logic [3:0] S_ROW   = 4'd5;
+    localparam logic [3:0] S_HOLD  = 4'd6;
+    localparam logic [3:0] S_PICK  = 4'd7;
+    localparam logic [3:0] S_LVL   = 4'd8;
+    localparam logic [3:0] S_LOAD  = 4'd9;
 
     function automatic logic [COL_W-1:0] pick(input logic [COLS-1:0] v);
-        pick = '0;
-        for (int i = 0; i < COLS; i++)
-            if (!SELL && v[i]) pick = i[COL_W-1:0];
-        for (int i = COLS - 1; i >= 0; i--)
-            if (SELL && v[i]) pick = i[COL_W-1:0];
+        logic [HI_N-1:0] any;
+        logic [LO_N-1:0] grp;
+        logic [HI_W-1:0] hi;
+        logic [LO_W-1:0] lo;
+        for (int g = 0; g < HI_N; g++) any[g] = |v[g*LO_N +: LO_N];
+        hi = '0;
+        for (int g = 0; g < HI_N; g++)
+            if (!SELL && any[g]) hi = g[HI_W-1:0];
+        for (int g = HI_N - 1; g >= 0; g--)
+            if (SELL && any[g]) hi = g[HI_W-1:0];
+        grp = v[hi*LO_N +: LO_N];
+        lo = '0;
+        for (int i = 0; i < LO_N; i++)
+            if (!SELL && grp[i]) lo = i[LO_W-1:0];
+        for (int i = LO_N - 1; i >= 0; i--)
+            if (SELL && grp[i]) lo = i[LO_W-1:0];
+        pick = {hi, lo};
     endfunction
 
-    logic [2:0] state;
+    logic [3:0] state;
 
     assign ready = state == S_IDLE;
 
     wire clearing = state == S_CLEAR;
     wire wr_ok    = wr_valid && ready;
     wire rd_ok    = rd_valid && ready;
-    wire occupied = wr_orders != '0;
-
-    wire better = SELL ? wr_slot < best_slot : wr_slot > best_slot;
 
     logic [SLOT_W-1:0] clear_slot;
 
-    logic [SLOT_W-1:0] p_slot;
-    logic              p_occupied;
-    logic              p_rescan;
+    logic [SLOT_W-1:0]  p_slot;
+    logic [SHARE_W-1:0] p_shares;
+    logic [ORDER_W-1:0] p_orders;
+    logic               p_rescan;
+
+    wire occupied = p_orders != '0;
+    wire better   = SELL ? p_slot < best_slot : p_slot > best_slot;
 
     logic [LEVEL_W-1:0] level [0:(1<<SLOT_W)-1];
     logic [LEVEL_W-1:0] level_q;
 
-    wire               level_we    = clearing || wr_ok;
-    wire [SLOT_W-1:0]  level_waddr = clearing ? clear_slot : wr_slot;
-    wire [LEVEL_W-1:0] level_wdata = clearing ? '0 : {wr_shares, wr_orders};
+    wire               level_we    = clearing || state == S_WR;
+    wire [SLOT_W-1:0]  level_waddr = clearing ? clear_slot : p_slot;
+    wire [LEVEL_W-1:0] level_wdata = clearing ? '0 : {p_shares, p_orders};
     wire [SLOT_W-1:0]  level_raddr = state == S_LVL ? best_slot : rd_slot;
 
     always_ff @(posedge clk) begin
@@ -95,6 +115,7 @@ module price_book #(
 
     logic [COLS-1:0]  occ [0:COLS-1];
     logic [COLS-1:0]  occ_q;
+    logic [COLS-1:0]  occ_r;
     logic [COLS-1:0]  summary;
     logic [COL_W-1:0] scan_row;
 
@@ -104,14 +125,13 @@ module price_book #(
     logic [COLS-1:0] occ_next;
     always_comb begin
         occ_next        = occ_q;
-        occ_next[p_col] = p_occupied;
+        occ_next[p_col] = occupied;
     end
 
     wire             occ_we    = clearing || state == S_UPD;
     wire [COL_W-1:0] occ_waddr = clearing ? clear_slot[COL_W-1:0] : p_row;
     wire [COLS-1:0]  occ_wdata = clearing ? '0 : occ_next;
-    wire [COL_W-1:0] occ_raddr = state == S_SCAN ? pick(summary)
-                                                 : wr_slot[SLOT_W-1:COL_W];
+    wire [COL_W-1:0] occ_raddr = state == S_ROW ? scan_row : p_row;
 
     always_ff @(posedge clk) begin
         if (occ_we) occ[occ_waddr] <= occ_wdata;
@@ -138,16 +158,21 @@ module price_book #(
                 end
 
                 S_IDLE: if (wr_ok) begin
-                    state      <= S_UPD;
-                    p_slot     <= wr_slot;
-                    p_occupied <= occupied;
-                    p_rescan   <= !occupied && best_valid && wr_slot == best_slot;
+                    state    <= S_WR;
+                    p_slot   <= wr_slot;
+                    p_shares <= wr_shares;
+                    p_orders <= wr_orders;
+                end
 
-                    if (occupied && (!best_valid || better || wr_slot == best_slot)) begin
+                S_WR: begin
+                    state    <= S_UPD;
+                    p_rescan <= !occupied && best_valid && p_slot == best_slot;
+
+                    if (occupied && (!best_valid || better || p_slot == best_slot)) begin
                         best_valid  <= 1'b1;
-                        best_slot   <= wr_slot;
-                        best_shares <= wr_shares;
-                        best_orders <= wr_orders;
+                        best_slot   <= p_slot;
+                        best_shares <= p_shares;
+                        best_orders <= p_orders;
                     end
                 end
 
@@ -159,7 +184,7 @@ module price_book #(
                 S_SCAN: begin
                     if (|summary) begin
                         scan_row <= pick(summary);
-                        state    <= S_PICK;
+                        state    <= S_ROW;
                     end else begin
                         best_valid  <= 1'b0;
                         best_slot   <= '0;
@@ -169,8 +194,15 @@ module price_book #(
                     end
                 end
 
+                S_ROW: state <= S_HOLD;
+
+                S_HOLD: begin
+                    occ_r <= occ_q;
+                    state <= S_PICK;
+                end
+
                 S_PICK: begin
-                    best_slot <= {scan_row, pick(occ_q)};
+                    best_slot <= {scan_row, pick(occ_r)};
                     state     <= S_LVL;
                 end
 

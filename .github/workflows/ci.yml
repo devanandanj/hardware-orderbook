@@ -22,7 +22,9 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Generated files are current
-        run: python spec/gen.py --check
+        run: |
+          python spec/gen.py --check
+          python spec/gen.py --check --book formal/book_small.yaml --outdir formal/generated
 
       - name: Spec self-tests
         run: python spec/test_spec.py
@@ -46,6 +48,7 @@ jobs:
       - run: make -C tb/order_table
       - run: make -C tb/price_slot
       - run: make -C tb/price_book
+      - run: make -C tb/book
 
   verilog:
     name: generated Verilog for ISE

@@ -27,11 +27,11 @@ is in progress.
 | `ethernet/` | Done, simulation only; not yet connected to the book |
 | `rtl/order_table.sv` | Done, tested against golden in `tb/order_table/`; timing not yet checked |
 | `rtl/price_slot.sv`, `rtl/price_book.sv` | Done, tested against golden in `tb/price_slot/` and `tb/price_book/`; timing not yet checked |
-| Book FSM, Mold/ITCH ingress, snapshot egress | Not started |
+| `rtl/book.sv` (book FSM) | Done, tested against golden in `tb/book/`; control properties proved in `formal/`; timing not yet checked |
+| Mold/ITCH ingress, snapshot egress | Not started |
 | Synthesis | Generated Verilog tested in simulation; no ISE run yet, so XST acceptance, BRAM inference and timing are unconfirmed |
-| `rtl/book.sv` | v2 core (64 orders per side, full-depth snapshots), to be replaced |
-| `formal/` | Proves the v2 core |
-| `tb/uvm/` | Written for the v2 core; does not build against the v3 golden model |
+| `formal/` | Proves the book FSM's control properties at a small geometry |
+| `tb/uvm/` | Written for the v2 core, which is removed; needs porting to v3 |
 
 ## Layout
 
@@ -42,10 +42,10 @@ spec/        wire-format single source of truth + code generator
   generated/   DO NOT EDIT -- regenerate with `python spec/gen.py`
 rtl/         SystemVerilog RTL
 synth/       SystemVerilog to Verilog conversion for ISE
-tb/order_table/, tb/price_slot/, tb/price_book/
+tb/order_table/, tb/price_slot/, tb/price_book/, tb/book/
              Verilator tests of each block against the golden model
 tb/uvm/      UVM testbench (Vivado xsim), golden model linked via DPI-C
-formal/      SymbiYosys assertion harness for the book core
+formal/      SymbiYosys proof of the book FSM, at a small geometry
 golden/      C++ golden model (git submodule, pinned)
 ethernet/    GMII to UDP payload front end and MAC TX (git submodule, pinned)
 ```
@@ -87,7 +87,7 @@ the hand-written ones in the golden model.
 
 | Decision | Choice | Why |
 |---|---|---|
-| RTL language | SystemVerilog, restricted subset, converted with sv2v for ISE | Matches the Ethernet front end, the testbench and the assertions. The target is a Virtex-5 XC5VLX110T on the XUPV5, which only ISE supports, and XST reads no SystemVerilog, so `make -C synth` generates plain Verilog; the `.sv` files stay the source of truth. Yosys limits the subset: memories stay plain vectors (it silently drops an array of structs), packed structs are assigned directly rather than cast, package names are qualified rather than wildcard-imported, functions assign to their name instead of using `return`, packed arrays stay one-dimensional, and structs stay out of generate blocks and function arguments |
+| RTL language | SystemVerilog, restricted subset, converted with sv2v for ISE | Matches the Ethernet front end, the testbench and the assertions; properties sit in the RTL under `` `ifdef FORMAL ``, which sv2v and ISE never see. The target is a Virtex-5 XC5VLX110T on the XUPV5, which only ISE supports, and XST reads no SystemVerilog, so `make -C synth` generates plain Verilog; the `.sv` files stay the source of truth. Yosys limits the subset: memories stay plain vectors (it silently drops an array of structs), packed structs are assigned directly rather than cast, package names are qualified rather than wildcard-imported, functions assign to their name instead of using `return`, packed arrays stay one-dimensional, and structs stay out of generate blocks and function arguments |
 | Order lookup | Set-associative hash table in BRAM, plus a small flop CAM | Thousands of resting orders rule out a parallel compare over every order. One BRAM bank per way reads a whole set in a cycle, and the CAM catches set overflow. The golden model mirrors the placement bit-exactly, so an order dropped in one is dropped in the other |
 | Throughput | Multi-cycle FSM, not one message per cycle | The shortest book message, `D`, takes about 21 cycles to arrive on an 8-bit datapath including its length prefix, which leaves room for several memory accesses per message |
 | Egress | Fixed-size 48-byte big-endian UDP packet, one per book message | Full depth no longer fits on the wire at this book size, so the packet carries the best bid and offer. UDP already supplies framing, length, and a checksum, so no SYNC word, no length field, no CRC. Fixed size means the serializer is a register file plus a byte counter |
@@ -110,10 +110,12 @@ make -C tb/order_table                  # seed 1
 make -C tb/order_table SEED=7 ROUNDS=200
 make -C tb/price_slot
 make -C tb/price_book
+make -C tb/book
 ```
 
 The v2 book core was verified with a UVM testbench in `tb/uvm/`, run on Vivado
-xsim. It needs porting to the v3 golden model before it builds again:
+xsim. The v2 core is removed, so it needs porting to the v3 book and golden model
+before it builds again:
 
 - **Agent**: driver, monitor and sequencer on `book_if`, one command per cycle.
 - **Scoreboard**: replays every observed command into the C++ golden model
@@ -131,8 +133,9 @@ tb/uvm/run.sh                      # book_random_test, seed 1
 tb/uvm/run.sh book_fill_test 42    # named test and seed
 ```
 
-SymbiYosys under `formal/` proves the v2 book's safety and per-command
-functional properties -- see `formal/README.md`.
+SymbiYosys under `formal/` proves the book FSM's control properties (handshake,
+latency budget, memory access rules, status) at a small geometry -- see
+`formal/README.md`. Data correctness rests on `tb/book/`.
 
 
 ## License

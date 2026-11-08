@@ -1,0 +1,22 @@
+# Book geometry for formal/ only: the logic of spec/book.yaml at a size the
+# solver can handle. `make -C formal` generates its itch_defs.vh from this.
+# Keep every key spec/book.yaml has; only the sizes differ.
+
+order_table:
+  hash: xor_fold
+  hash_width: 1           # 2 sets
+  ways: 1
+  cam_depth: 1
+  entry:
+    - { name: valid,  width: 1 }
+    - { name: orn,    width: 64 }
+    - { name: side,   width: 1 }
+    - { name: slot,   width: 4 }
+    - { name: shares, width: 32 }
+
+price_book:
+  tick: 100
+  slot_width: 4           # 16 slots per side, a 4 x 4 bitmap
+  level:
+    - { name: shares, width: 32 }
+    - { name: orders, width: 16 }

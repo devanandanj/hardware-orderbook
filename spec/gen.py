@@ -463,9 +463,15 @@ def main() -> int:
                         help="directory to write generated files into")
     parser.add_argument("--check", action="store_true",
                         help="exit non-zero if on-disk files are out of date")
+    parser.add_argument("--book", type=Path,
+                        help="book geometry to use instead of spec/book.yaml "
+                             "(formal/ builds a small book this way)")
     args = parser.parse_args()
 
     itch, mold, snap, book = load_specs()
+    if args.book:
+        with open(args.book, encoding="utf-8") as f:
+            book = yaml.safe_load(f)
 
     try:
         validate(itch, mold, snap)

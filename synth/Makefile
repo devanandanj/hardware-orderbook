@@ -9,7 +9,7 @@
 
 ROOT   := $(abspath ..)
 SV2V   ?= sv2v
-BOOK   := $(addprefix $(ROOT)/rtl/,order_table.sv price_slot.sv price_book.sv)
+BOOK   := $(addprefix $(ROOT)/rtl/,book.sv order_table.sv price_slot.sv price_book.sv)
 ETH    := $(wildcard $(ROOT)/ethernet/rtl/*.sv)
 INC    := $(ROOT)/rtl/book_pkg.sv $(ROOT)/spec/generated/itch_defs.vh
 
@@ -30,6 +30,10 @@ check: all
 	    $(MAKE) -C $(ROOT)/tb/$$t RTL=$(CURDIR)/build/$$t.v || exit 1; \
 	    $(MAKE) -C $(ROOT)/tb/$$t clean; \
 	done
+	$(MAKE) -C $(ROOT)/tb/book clean
+	$(MAKE) -C $(ROOT)/tb/book \
+	    RTL="$(addprefix $(CURDIR)/build/,book.v order_table.v price_slot.v price_book.v)"
+	$(MAKE) -C $(ROOT)/tb/book clean
 
 clean:
 	rm -rf build

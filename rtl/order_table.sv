@@ -138,6 +138,22 @@ module order_table (
     cam_free <= cam_free_nx;
   end
 
+  logic                     s2_valid;
+  logic [       HASH_W-1:0] s2_set;
+  logic [WAYS*ENTRY_W-1:0]  s2_way;
+  logic [         WAYS-1:0] s2_way_hit, s2_way_free;
+  logic [        CAM_N-1:0] s2_cam_hit, s2_cam_free;
+
+  always_ff @(posedge clk) begin
+    s2_valid    <= s1_valid && !rst;
+    s2_set      <= s1_set;
+    s2_way      <= way_rd;
+    s2_way_hit  <= way_hit;
+    s2_way_free <= way_free;
+    s2_cam_hit  <= cam_hit;
+    s2_cam_free <= cam_free;
+  end
+
   logic hit, hit_cam, free, free_cam;
   logic [3:0] hit_idx, free_idx;
   book_pkg::entry_t hit_entry;
@@ -152,13 +168,13 @@ module order_table (
     free_idx  = '0;
 
     for (int i = CAM_N - 1; i >= 0; i--) begin
-      if (cam_hit[i]) begin
+      if (s2_cam_hit[i]) begin
         hit       = 1'b1;
         hit_cam   = 1'b1;
         hit_idx   = i[3:0];
         hit_entry = cam[i*ENTRY_W+:ENTRY_W];
       end
-      if (cam_free[i]) begin
+      if (s2_cam_free[i]) begin
         free     = 1'b1;
         free_cam = 1'b1;
         free_idx = i[3:0];
@@ -166,13 +182,13 @@ module order_table (
     end
 
     for (int i = WAYS - 1; i >= 0; i--) begin
-      if (way_hit[i]) begin
+      if (s2_way_hit[i]) begin
         hit       = 1'b1;
         hit_cam   = 1'b0;
         hit_idx   = i[3:0];
-        hit_entry = way_rd[i*ENTRY_W+:ENTRY_W];
+        hit_entry = s2_way[i*ENTRY_W+:ENTRY_W];
       end
-      if (way_free[i]) begin
+      if (s2_way_free[i]) begin
         free     = 1'b1;
         free_cam = 1'b0;
         free_idx = i[3:0];
@@ -181,8 +197,8 @@ module order_table (
   end
 
   always_ff @(posedge clk) begin
-    rsp_valid     <= s1_valid && !rst;
-    rsp_set       <= s1_set;
+    rsp_valid     <= s2_valid && !rst;
+    rsp_set       <= s2_set;
     rsp_hit       <= hit;
     rsp_hit_cam   <= hit_cam;
     rsp_hit_idx   <= hit_idx;

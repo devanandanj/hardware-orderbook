@@ -43,7 +43,7 @@ struct Expect {
 	TableLoc free;
 };
 
-static std::optional<Expect> stage;   // accepted last posedge
+static std::optional<Expect> stage, stage2;
 static bool checking;                 // off through reset
 
 // Reached-state counters; a run that misses one proves nothing about it.
@@ -106,11 +106,12 @@ static void Tick(std::optional<Expect> accepted = std::nullopt) {
 
 	if (checking) {
 		if (dut->rsp_valid != stage.has_value())
-			Fail("rsp_valid not exactly 2 cycles after req_valid",
+			Fail("rsp_valid not exactly 3 cycles after req_valid",
 			     stage ? stage->orn : 0);
 		if (stage) Check(*stage);
 	}
-	stage = accepted;
+	stage = stage2;
+	stage2 = accepted;
 }
 
 static void Idle(int n = 1) {
@@ -120,7 +121,7 @@ static void Idle(int n = 1) {
 }
 
 static void Drain() {
-	if (stage) Idle();
+	while (stage || stage2) Idle();
 }
 
 static Expect Golden(uint64_t orn) {
@@ -156,6 +157,7 @@ static void Write(const TableLoc& loc, const TableEntry& e) {
 static void Reset() {
 	checking = false;
 	stage.reset();
+	stage2.reset();
 	dut->req_valid = 0;
 	dut->wr_valid = 0;
 	dut->rst = 1;

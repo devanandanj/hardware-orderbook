@@ -118,6 +118,7 @@ module price_book #(
     logic [COLS-1:0]  occ_r;
     logic [COLS-1:0]  summary;
     logic [COL_W-1:0] scan_row;
+    logic             row_any;
 
     wire [COL_W-1:0] p_row = p_slot[SLOT_W-1:COL_W];
     wire [COL_W-1:0] p_col = p_slot[COL_W-1:0];
@@ -131,7 +132,8 @@ module price_book #(
     wire             occ_we    = clearing || state == S_UPD;
     wire [COL_W-1:0] occ_waddr = clearing ? clear_slot[COL_W-1:0] : p_row;
     wire [COLS-1:0]  occ_wdata = clearing ? '0 : occ_next;
-    wire [COL_W-1:0] occ_raddr = state == S_ROW ? scan_row : p_row;
+    wire [COL_W-1:0] occ_raddr = state == S_ROW  ? scan_row :
+                                 state == S_IDLE ? wr_slot[SLOT_W-1:COL_W] : p_row;
 
     always_ff @(posedge clk) begin
         if (occ_we) occ[occ_waddr] <= occ_wdata;
@@ -167,6 +169,7 @@ module price_book #(
                 S_WR: begin
                     state    <= S_UPD;
                     p_rescan <= !occupied && best_valid && p_slot == best_slot;
+                    row_any  <= occupied || |(occ_q & ~(COLS'(1) << p_col));
 
                     if (occupied && (!best_valid || better || p_slot == best_slot)) begin
                         best_valid  <= 1'b1;
@@ -177,7 +180,7 @@ module price_book #(
                 end
 
                 S_UPD: begin
-                    summary[p_row] <= |occ_next;
+                    summary[p_row] <= row_any;
                     state          <= p_rescan ? S_SCAN : S_IDLE;
                 end
 

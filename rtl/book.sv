@@ -75,8 +75,9 @@ module book (
   logic [3:0] ot_rsp_hit_idx, ot_rsp_free_idx;
   book_pkg::entry_t        ot_rsp_hit_entry;
 
+  logic                    look2;
   wire                     ot_req_valid = (accept && is_book) || state == S_LOOK2;
-  wire              [63:0] ot_req_orn = state == S_LOOK2 ? c_new_orn : cmd_orn;
+  wire              [63:0] ot_req_orn = look2 ? c_new_orn : cmd_orn;
 
   logic tw_valid, tw_cam;
   logic             [HASH_W-1:0] tw_set;
@@ -153,12 +154,19 @@ module book (
   logic [SLOT_W-1:0] rd_slot;
   logic lw_valid, lw_side;
   logic [SLOT_W-1:0] lw_slot;
-  logic [      31:0] lw_shares;
-  logic [      15:0] lw_orders;
+  logic [      31:0] lw_dshares;
+  logic [      15:0] lw_dorders;
 
   logic bid_ready, ask_ready;
   logic [31:0] bid_rd_shares, ask_rd_shares;
   logic [15:0] bid_rd_orders, ask_rd_orders;
+
+  wire  [31:0] bid_lw_shares = bid_rd_shares + lw_dshares;
+  wire  [31:0] ask_lw_shares = ask_rd_shares + lw_dshares;
+  wire  [15:0] bid_lw_orders = bid_rd_orders + lw_dorders;
+  wire  [15:0] ask_lw_orders = ask_rd_orders + lw_dorders;
+  wire  [31:0] lw_shares = lw_side ? ask_lw_shares : bid_lw_shares;
+  wire  [15:0] lw_orders = lw_side ? ask_lw_orders : bid_lw_orders;
 
   price_book #(
       .SELL(1'b0)
@@ -173,8 +181,8 @@ module book (
       .rd_orders   (bid_rd_orders),
       .wr_valid    (lw_valid && !lw_side),
       .wr_slot     (lw_slot),
-      .wr_shares   (lw_shares),
-      .wr_orders   (lw_orders),
+      .wr_shares   (bid_lw_shares),
+      .wr_orders   (bid_lw_orders),
       .best_valid  (bid_valid),
       .best_slot   (bid_slot),
       .best_shares (bid_shares),
@@ -194,16 +202,13 @@ module book (
       .rd_orders   (ask_rd_orders),
       .wr_valid    (lw_valid && lw_side),
       .wr_slot     (lw_slot),
-      .wr_shares   (lw_shares),
-      .wr_orders   (lw_orders),
+      .wr_shares   (ask_lw_shares),
+      .wr_orders   (ask_lw_orders),
       .best_valid  (ask_valid),
       .best_slot   (ask_slot),
       .best_shares (ask_shares),
       .best_orders (ask_orders)
   );
-
-  wire [31:0] lvl_shares = lw_side ? ask_rd_shares : bid_rd_shares;
-  wire [15:0] lvl_orders = lw_side ? ask_rd_orders : bid_rd_orders;
 
   wire        rem_ready = lk_entry.side ? ask_ready : bid_ready;
   wire        ins_ready = c_side ? ask_ready : bid_ready;
@@ -229,8 +234,8 @@ module book (
     lw_valid  = 1'b0;
     lw_side   = c_side;
     lw_slot   = sl_slot;
-    lw_shares = lvl_shares + c_shares;
-    lw_orders = lvl_orders + 16'd1;
+    lw_dshares = c_shares;
+    lw_dorders = 16'd1;
 
     if (state == S_REM_WR) begin
       tw_valid = 1'b1;
@@ -241,8 +246,8 @@ module book (
       lw_valid  = 1'b1;
       lw_side   = lk_entry.side;
       lw_slot   = lk_entry.slot;
-      lw_shares = lvl_shares - (full_remove ? lk_entry.shares : c_shares);
-      lw_orders = lvl_orders - {15'd0, full_remove};
+      lw_dshares = -(full_remove ? lk_entry.shares : c_shares);
+      lw_dorders = -{15'd0, full_remove};
     end else if (state == S_INS_WR) begin
       tw_valid        = 1'b1;
       tw_cam          = lk_free_cam;
@@ -257,6 +262,7 @@ module book (
   end
 
   always_ff @(posedge clk) begin
+    look2 <= !rst && state == S_REM_WR && c_type == "U";
     if (rst) begin
       state             <= S_INIT;
       done              <= 1'b0;
@@ -335,7 +341,7 @@ module book (
 
 `ifdef FORMAL
     logic [2:0] f_age = '0;
-    logic       f_ot1, f_ot2;
+    logic       f_ot1, f_ot2, f_ot3;
     logic       f_ps1, f_ps2, f_ps3, f_ps4;
     logic       f_busy;
     logic [5:0] f_cycles;
@@ -348,6 +354,7 @@ module book (
         if (f_age != 3'd7) f_age <= f_age + 3'd1;
         f_ot1 <= ot_req_valid && ot_ready && !rst;
         f_ot2 <= f_ot1 && !rst;
+        f_ot3 <= f_ot2 && !rst;
         f_ps1 <= accept;
         f_ps2 <= f_ps1;
         f_ps3 <= f_ps2;
@@ -386,7 +393,7 @@ module book (
         assume (rst == (f_age == 3'd0));
 
         if (f_pipe) begin
-            assert (ot_rsp_valid == f_ot2);
+            assert (ot_rsp_valid == f_ot3);
             assert (ps_rsp_valid == f_ps4);
             assert (ps_pending == (f_ps1 || f_ps2 || f_ps3 || f_ps4));
         end
@@ -394,9 +401,10 @@ module book (
         if (f_run) begin
             if (!f_pipe) assert (state == S_INIT);
             assert (state <= S_SETTLE);
+            assert (look2 == (state == S_LOOK2));
             if (state != S_INIT) assert (ot_ready);
-            if (state == S_LOOK) assert (f_ot1 || f_ot2);
-            if (state == S_IDLE) assert (!ps_pending && !f_ot1 && !f_ot2 && bid_ready && ask_ready);
+            if (state == S_LOOK) assert (f_ot1 || f_ot2 || f_ot3);
+            if (state == S_IDLE) assert (!ps_pending && !f_ot1 && !f_ot2 && !f_ot3 && bid_ready && ask_ready);
             if (state == S_INIT) assert (!f_busy && !done);
 
             assert (f_busy == (f_active || done));
@@ -413,7 +421,7 @@ module book (
                 assert (f_ps3 == (f_cycles == 6'd3));
                 assert (f_ps4 == (f_cycles == 6'd4));
                 if (phase2) assert (c_type == "U" && f_wrote);
-                if (phase2 && state != S_SETTLE) assert (f_lw_age == f_cycles - 6'd4);
+                if (phase2 && state != S_SETTLE) assert (f_lw_age == f_cycles - 6'd5);
             end
             if (f_active && state != S_SETTLE) assert (f_add || f_rem);
             if (state == S_REM_RD || state == S_REM_WR) assert (f_rem && !phase2);
@@ -423,23 +431,23 @@ module book (
 
             case (state)
                 S_LOOK: if (!phase2) assert (!f_wrote && f_ot1 == (f_cycles == 6'd1) &&
-                                             f_ot2 == (f_cycles == 6'd2));
-                        else         assert (f_ot1 == (f_cycles == 6'd6) &&
-                                             f_ot2 == (f_cycles == 6'd7));
-                S_REM_RD: assert (!f_wrote && f_cycles == 6'd3);
-                S_REM_WR: assert (!f_wrote && f_cycles == 6'd4);
-                S_LOOK2:  assert (f_cycles == 6'd5);
-                S_INS:    if (!phase2) assert (!f_wrote && f_cycles >= 6'd3 && f_cycles <= 6'd5);
-                          else         assert (f_cycles >= 6'd8 && f_cycles <= 6'd13);
-                S_INS_WR: assert (phase2 ? f_cycles <= 6'd14 : (!f_wrote && f_cycles >= 6'd4 && f_cycles <= 6'd6));
+                                             f_ot2 == (f_cycles == 6'd2) && f_ot3 == (f_cycles == 6'd3));
+                        else         assert (f_ot1 == (f_cycles == 6'd7) &&
+                                             f_ot2 == (f_cycles == 6'd8) && f_ot3 == (f_cycles == 6'd9));
+                S_REM_RD: assert (!f_wrote && f_cycles == 6'd4);
+                S_REM_WR: assert (!f_wrote && f_cycles == 6'd5);
+                S_LOOK2:  assert (f_cycles == 6'd6);
+                S_INS:    if (!phase2) assert (!f_wrote && f_cycles >= 6'd4 && f_cycles <= 6'd5);
+                          else         assert (f_cycles >= 6'd10 && f_cycles <= 6'd14);
+                S_INS_WR: assert (phase2 ? f_cycles <= 6'd15 : (!f_wrote && f_cycles >= 6'd5 && f_cycles <= 6'd6));
                 S_SETTLE: begin
-                    assert (f_cycles <= (phase2 ? 6'd23 : 6'd15));
-                    if (f_wrote) assert (f_lw_age <= 5'd10 && f_cycles <= f_lw_age + (phase2 ? 6'd14 : 6'd6));
+                    assert (f_cycles <= (phase2 ? 6'd24 : 6'd16));
+                    if (f_wrote) assert (f_lw_age <= 5'd10 && f_cycles <= f_lw_age + (phase2 ? 6'd15 : 6'd6));
                     else         assert (f_cycles <= 6'd6);
                 end
                 default: ;
             endcase
-            if (done) assert (f_cycles <= 6'd24);
+            if (done) assert (f_cycles <= 6'd25);
 
             if (tw_valid) assert (!ot_req_valid && !f_ot1);
             if (rd_go)    assert (rd_side ? ask_ready : bid_ready);

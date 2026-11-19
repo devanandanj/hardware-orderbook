@@ -47,6 +47,8 @@ module price_slot (
     logic [D_W-1:0]    s3_d;
     logic [SLOT_W-1:0] s3_q;
 
+    (* use_dsp48 = "no" *) wire [D_W-1:0] s3_back = D_W'(s3_q * TICK);
+
     always_ff @(posedge clk) begin
         s1_valid <= req_valid;
         s1_ok    <= !d[33] && d < WINDOW;
@@ -63,7 +65,7 @@ module price_slot (
         s3_q     <= s2_prod[SHIFT +: SLOT_W];
 
         rsp_valid <= s3_valid;
-        rsp_ok    <= s3_ok && s3_d == D_W'(s3_q * TICK);
+        rsp_ok    <= s3_ok && s3_d == s3_back;
         rsp_slot  <= s3_q;
     end
 

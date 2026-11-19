@@ -168,6 +168,8 @@ module ingress (
   logic [63:0] orn_nx, new_orn_nx;
   logic [31:0] shares_nx, price_nx;
 
+  logic at0, e_locate, e_side, e_orn, e_new_orn, e_shares, e_price, e_last, e_ok, loc_ok;
+
   wire body = byte_in && !in_hdr && phase == P_BODY;
 
   always_comb begin
@@ -179,25 +181,21 @@ module ingress (
     shares_nx  = f_shares;
     price_nx   = f_price;
     if (body) begin
-      if (bidx == 16'd0) type_nx = m_data;
-      if (in_field(bidx, locate_off(f_type), 2)) locate_nx = {f_locate[7:0], m_data};
-      if (in_field(bidx, side_off(f_type), 1)) side_nx = m_data != `ITCH_SIDE_BUY_CHAR;
-      if (in_field(bidx, orn_off(f_type), 8)) orn_nx = {f_orn[55:0], m_data};
-      if (f_type == T_U && in_field(bidx, `ITCH_ORDER_REPLACE_NEW_ORDER_REF_OFF, 8))
-        new_orn_nx = {f_new_orn[55:0], m_data};
-      if (in_field(bidx, shares_off(f_type), 4)) shares_nx = {f_shares[23:0], m_data};
-      if (in_field(bidx, price_off(f_type), 4)) price_nx = {f_price[23:0], m_data};
+      if (at0) type_nx = m_data;
+      if (e_locate) locate_nx = {f_locate[7:0], m_data};
+      if (e_side) side_nx = m_data != `ITCH_SIDE_BUY_CHAR;
+      if (e_orn) orn_nx = {f_orn[55:0], m_data};
+      if (e_new_orn) new_orn_nx = {f_new_orn[55:0], m_data};
+      if (e_shares) shares_nx = {f_shares[23:0], m_data};
+      if (e_price) price_nx = {f_price[23:0], m_data};
     end
   end
 
   wire zero_len = byte_in && !in_hdr && phase == P_LEN_LO && {len_hi, m_data} == 16'd0;
-  wire last = body && bidx == mlen - 16'd1;
+  wire last = body && e_last;
   wire msg_done = last || zero_len;
-  wire selected = last && pkt_take && book_len(
-      type_nx
-  ) != 8'd0 && mlen >= {8'd0, book_len(
-      type_nx
-  )} && (!cfg_filter_en || locate_nx == cfg_locate);
+  wire selected = last && pkt_take && e_ok && (!cfg_filter_en || loc_ok);
+  wire [15:0] bidx_nx = bidx + 16'd1;
 
   always_ff @(posedge clk) begin
     if (rst) begin
@@ -238,12 +236,30 @@ module ingress (
             phase  <= P_LEN_LO;
           end
           P_LEN_LO: begin
-            mlen  <= {len_hi, m_data};
-            bidx  <= '0;
-            phase <= zero_len ? P_LEN_HI : P_BODY;
+            mlen      <= {len_hi, m_data};
+            bidx      <= '0;
+            phase     <= zero_len ? P_LEN_HI : P_BODY;
+            at0       <= 1'b1;
+            e_locate  <= 1'b0;
+            e_side    <= 1'b0;
+            e_orn     <= 1'b0;
+            e_new_orn <= 1'b0;
+            e_shares  <= 1'b0;
+            e_price   <= 1'b0;
+            e_last    <= {len_hi, m_data} == 16'd1;
+            e_ok      <= 1'b0;
           end
           default: begin
-            bidx <= bidx + 16'd1;
+            bidx      <= bidx_nx;
+            at0       <= 1'b0;
+            e_locate  <= in_field(bidx_nx, locate_off(type_nx), 2);
+            e_side    <= in_field(bidx_nx, side_off(type_nx), 1);
+            e_orn     <= in_field(bidx_nx, orn_off(type_nx), 8);
+            e_new_orn <= type_nx == T_U && in_field(bidx_nx, `ITCH_ORDER_REPLACE_NEW_ORDER_REF_OFF, 8);
+            e_shares  <= in_field(bidx_nx, shares_off(type_nx), 4);
+            e_price   <= in_field(bidx_nx, price_off(type_nx), 4);
+            e_last    <= bidx_nx == mlen - 16'd1;
+            e_ok      <= book_len(type_nx) != 8'd0 && mlen >= {8'd0, book_len(type_nx)};
             if (last) phase <= P_LEN_HI;
           end
         endcase
@@ -263,6 +279,7 @@ module ingress (
     f_new_orn <= new_orn_nx;
     f_shares  <= shares_nx;
     f_price   <= price_nx;
+    loc_ok    <= locate_nx == cfg_locate;
   end
 
   always_ff @(posedge clk) begin

@@ -26,9 +26,9 @@ A real trading day, SPY from the 2019-07-30 NASDAQ BX feed (260,752 messages),
 replays through the whole design in simulation with every snapshot matching
 golden byte for byte.
 
-- Book update in 10 to 18 cycles at 125 MHz (80 to 144 ns); arrival to commit
-  is at most 19 cycles.
-- 5,177 LUTs (7%), 4,921 registers, 66 of 148 block RAMs, 5 DSPs.
+- Book update in 10 to 19 cycles at 125 MHz (80 to 152 ns); arrival to commit
+  is at most 20 cycles.
+- 5,110 LUTs (7%), 5,317 registers, 69 of 148 block RAMs, 4 DSPs.
 - 1024 x 3-way order table plus a 16-entry CAM; 16,384 price levels per side.
 
 | Block | State |
@@ -42,7 +42,7 @@ golden byte for byte.
 | `rtl/egress.sv`, `rtl/async_fifo.sv` (snapshot egress) | Done, tested against golden's snapshot encoder in `tb/egress/` across unrelated clock ratios and a full FIFO |
 | `rtl/orderbook_top.sv` (full system) | Done, `eth_stack` to ingress to book to egress; tested end to end in `tb/top/` against golden, GMII frames in and out |
 | `rtl/xupv5_top.sv`, `synth/xupv5.ucf` (board) | Builds in ISE, never run on the board: PLL, PHY reset, GMII I/O registers, status LEDs. Pins from the ML505/XUPV5 schematic |
-| Synthesis | ISE 14.7 meets every constraint at 125 MHz (7.956 ns, so only 44 ps of slack), GMII TX outputs included; 5,177 LUTs, 4,921 registers, 66 block RAMs, 5 DSPs. Generated Verilog tested in simulation; `make -C synth timing` runs ISE through place and route and timing at standard effort; `make -C synth bit` reruns it at high effort and writes the bitstream |
+| Synthesis | ISE 14.7 meets every constraint at 125 MHz, GMII TX outputs included, and still meets them with the clocks tightened to 7.5 ns (133 MHz), so there is at least 0.5 ns of margin; 5,110 LUTs, 5,317 registers, 69 block RAMs, 4 DSPs. Generated Verilog tested in simulation; `make -C synth timing` runs ISE through place and route and timing at standard effort; `make -C synth bit` reruns it at high effort and writes the bitstream |
 | `formal/` | Proves the book FSM's control properties at a small geometry |
 | `tb/uvm/` | Written for the v2 core, which is removed; needs porting to v3 |
 

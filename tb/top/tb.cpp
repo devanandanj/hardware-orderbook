@@ -14,6 +14,7 @@
 
 #include "book.h"
 #include "command.h"
+#include "moldudp64.h"
 #include "snapshot.h"
 
 namespace spec {
@@ -40,8 +41,7 @@ static std::deque<std::pair<uint8_t, bool>> rxq;
 static Bytes txFrame;
 
 static Book gold;
-static bool haveExpected, gapSeen;
-static uint64_t expected;
+static MoldSequencer sequencer;
 static uint32_t msgIndex, snapSeq;
 static std::vector<std::array<uint8_t, SNAP_PACKET_LEN>> want;
 static size_t got;
@@ -121,9 +121,10 @@ static void Reference(const Bytes& p, bool bad) {
 	const uint64_t seq = Get(&p[spec::MOLD_SEQUENCE_OFF], 8);
 	const uint16_t count = (uint16_t)Get(&p[spec::MOLD_MESSAGE_COUNT_OFF], 2);
 	if (count == spec::MOLD_END_OF_SESSION) { covEos++; return; }
-	const bool retrans = haveExpected && seq < expected;
-	if (retrans) covRetrans++;
-	if (!retrans && haveExpected && seq > expected) { gapSeen = true; covGap++; }
+	const uint64_t gaps = sequencer.gaps(), retransmissions = sequencer.retransmissions();
+	const bool take = sequencer.Begin(seq, count);
+	covGap += sequencer.gaps() - gaps;
+	covRetrans += sequencer.retransmissions() - retransmissions;
 	if (count == spec::MOLD_HEARTBEAT) covHeartbeat++;
 
 	size_t i = spec::MOLD_HDR_LEN;
@@ -132,7 +133,7 @@ static void Reference(const Bytes& p, bool bad) {
 		const uint8_t* msg = &p[i + 2];
 		i += 2 + len;
 		const uint32_t index = msgIndex++;
-		if (retrans) continue;
+		if (!take) continue;
 		const std::optional<Command> cmd = ParseCommand(msg, len);
 		if (!cmd) { covOtherType++; continue; }
 		if (Get(msg + 1, 2) != LOCATE) { covOtherLocate++; continue; }
@@ -143,14 +144,11 @@ static void Reference(const Bytes& p, bool bad) {
 		covUnknown += o.status >> SNAP_STATUS_UNKNOWN_ORDER_REF & 1;
 		std::array<uint8_t, SNAP_PACKET_LEN> pkt;
 		EncodeSnapshotPacket(pkt.data(), gold,
-		                     o.status | (gapSeen ? 1u << SNAP_STATUS_MOLD_GAP_SEEN : 0u),
+		                     o.status | (sequencer.gap_seen() ? 1u << SNAP_STATUS_MOLD_GAP_SEEN : 0u),
 		                     snapSeq++, seq, index);
 		want.push_back(pkt);
 	}
-	if (!retrans && !bad) {
-		expected = count ? seq + count : seq;
-		haveExpected = true;
-	}
+	sequencer.End(bad);
 }
 
 static Bytes header;
@@ -235,8 +233,7 @@ static void Reset() {
 	dut->rst_async = 0;
 	RunRx(INIT_CYCLES);
 	ResetBook(&gold, BASE);
-	haveExpected = gapSeen = false;
-	expected = 0;
+	sequencer = MoldSequencer{};
 	msgIndex = snapSeq = 0;
 	want.clear();
 	got = 0;
@@ -250,7 +247,7 @@ static void Drain() {
 	}
 	RunRx(2000);
 	if (got != want.size()) Fail("extra snapshots");
-	if (dut->mold_gap_seen != gapSeen) Fail("mold_gap_seen");
+	if (dut->mold_gap_seen != sequencer.gap_seen()) Fail("mold_gap_seen");
 	if (dut->cmd_overrun) Fail("cmd_overrun");
 	if (dut->snap_overflow) Fail("snap_overflow");
 }

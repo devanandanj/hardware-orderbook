@@ -6,7 +6,7 @@ BASE   ?= 1000000
 RTL    ?= $(addprefix $(ROOT)/rtl/,book_pkg.sv orderbook_top.sv ingress.sv book.sv order_table.sv price_slot.sv price_book.sv egress.sv async_fifo.sv) \
           $(wildcard $(ROOT)/ethernet/rtl/*.sv)
 BUILD  := build/$(LOCATE)-$(BASE)
-GOLDEN := $(addprefix $(ROOT)/golden/src/,command.cpp itchparser.cpp book.cpp ordertable.cpp pricebook.cpp snapshot.cpp)
+GOLDEN := $(addprefix $(ROOT)/golden/src/,command.cpp itchparser.cpp moldudp64.cpp book.cpp ordertable.cpp pricebook.cpp snapshot.cpp)
 
 .PHONY: run replay clean
 

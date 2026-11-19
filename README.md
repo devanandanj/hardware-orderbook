@@ -44,7 +44,7 @@ golden byte for byte.
 | `rtl/xupv5_top.sv`, `synth/xupv5.ucf` (board) | Builds in ISE, never run on the board: PLL, PHY reset, GMII I/O registers, status LEDs. Pins from the ML505/XUPV5 schematic |
 | Synthesis | ISE 14.7 meets every constraint at 125 MHz, GMII TX outputs included, and still meets them with the clocks tightened to 7.5 ns (133 MHz), so there is at least 0.5 ns of margin; 5,110 LUTs, 5,317 registers, 69 block RAMs, 4 DSPs. Generated Verilog tested in simulation; `make -C synth timing` runs ISE through place and route and timing at standard effort; `make -C synth bit` reruns it at high effort and writes the bitstream |
 | `formal/` | Proves the book FSM's control properties at a small geometry |
-| `tb/uvm/` | Written for the v2 core, which is removed; needs porting to v3 |
+| `tb/uvm/` | UVM testbench for `rtl/book.sv` on Vivado xsim, golden model via DPI-C; local only, not in CI |
 
 ## Layout
 
@@ -162,24 +162,32 @@ make -C tb/ingress replay MOLD=day.mold LOCATE=13   # a real day, via golden/too
 make -C tb/top replay MOLD=day.mold LOCATE=13 BASE=1000000
 ```
 
-The v2 book core was verified with a UVM testbench in `tb/uvm/`, run on Vivado
-xsim. The v2 core is removed, so it needs porting to the v3 book and golden model
-before it builds again:
+`tb/uvm/` is a UVM testbench for `rtl/book.sv` on Vivado xsim (tested with
+2026.1). It needs Vivado, so it runs locally and not in CI:
 
-- **Agent**: driver, monitor and sequencer on `book_if`, one command per cycle.
-- **Scoreboard**: replays every observed command into the C++ golden model
-  through DPI-C and compares the full book after each commit, so the RTL is
-  checked against the same code as everything else, not a re-port.
-- **Sequences**: a directed full-book corner sequence (fill, tie/worse/better
-  adds, partial and over-fill executions, replace, unknown refs) and a
-  constrained-random A/D/E/U mix.
-- **Coverage**: command type x hit/miss, add outcome (insert/evict/discard)
-  x side, partial vs. full execution.
-- **SVA** in `book_if`: commit timing, count bounds, full flags, sticky gap.
+- **Agent**: the driver puts noise on the command inputs whenever valid is low.
+  The monitor pairs each accepted command with its `done`, and with every order
+  table, CAM and price level write in between. Those writes come from
+  `book_wr_if`, which is bound into `book`.
+- **Scoreboard**: applies each command to the C++ golden model through DPI-C
+  (`golden/include/golden_api.h`). It then compares the status bits, every
+  memory write in order, the BBO, and the cycle count against the per-type
+  budget.
+- **Sequences**: the directed corners are a full set spilling into the CAM and
+  then dropping, both ends of the price range, off-tick prices, partial, exact
+  and oversize removes, unknown references, replace variants, and level rescans
+  down to an empty book. A random mix follows, with hash collisions forced so
+  the CAM fills.
+- **Coverage**: type x outcome, CAM use, partial vs. full remove, BBO change.
+  A test fails if CAM writes, drops, rejects or unknown references never
+  happened.
+- **SVA** in `book_if`: handshake, completion within 42 cycles, one status bit,
+  empty sides read zero.
 
 ```bash
-tb/uvm/run.sh                      # book_random_test, seed 1
-tb/uvm/run.sh book_fill_test 42    # named test and seed
+tb/uvm/run.sh                          # book_random_test, seed 1
+tb/uvm/run.sh book_corner_test 7       # named test and seed
+COUNT=100000 tb/uvm/run.sh             # longer random run
 ```
 
 SymbiYosys under `formal/` proves the book FSM's control properties (handshake,

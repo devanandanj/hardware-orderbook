@@ -13,20 +13,20 @@ module async_fifo #(
     parameter int A = 7,
     parameter int L = 3
 ) (
-    input  logic         wclk,
-    input  logic         wrst,
-    input  logic         w_en,
-    input  logic [L-1:0] w_word,
-    input  logic [W-1:0] w_data,
-    input  logic         w_push,
-    output logic         w_room,
+    input  wire logic         wclk,
+    input  wire logic         wrst,
+    input  wire logic         w_en,
+    input  wire logic [L-1:0] w_word,
+    input  wire logic [W-1:0] w_data,
+    input  wire logic         w_push,
+    output logic              w_room,
 
-    input  logic         rclk,
-    input  logic         rrst,
-    input  logic [L-1:0] r_word,
-    output logic [W-1:0] r_data,
-    output logic         r_avail,
-    input  logic         r_pop
+    input  wire logic         rclk,
+    input  wire logic         rrst,
+    input  wire logic [L-1:0] r_word,
+    output logic      [W-1:0] r_data,
+    output logic              r_avail,
+    input  wire logic         r_pop
 );
 
   localparam int DEPTH = 1 << (A + L);

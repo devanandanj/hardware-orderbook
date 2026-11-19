@@ -9,24 +9,24 @@
 `default_nettype none
 
 module xupv5_top #(
-    parameter logic [47:0] MAC        = 48'h02_00_00_00_00_01,
-    parameter logic [31:0] IP         = 32'hC0A8_0A02,
-    parameter logic [15:0] PORT       = 16'd26400,
-    parameter logic [47:0] HOST_MAC   = 48'h02_00_00_00_00_02,
-    parameter logic [31:0] HOST_IP    = 32'hC0A8_0A01,
-    parameter logic [15:0] HOST_PORT  = 16'd26401,
-    parameter logic        FILTER_EN  = 1'b1,
-    parameter logic [15:0] LOCATE     = 16'd1,
-    parameter logic [31:0] BASE_PRICE = 32'd1_000_000,
+    parameter logic [47:0] MAC           = 48'h02_00_00_00_00_01,
+    parameter logic [31:0] IP            = 32'hC0A8_0A02,
+    parameter logic [15:0] PORT          = 16'd26400,
+    parameter logic [47:0] HOST_MAC      = 48'h02_00_00_00_00_02,
+    parameter logic [31:0] HOST_IP       = 32'hC0A8_0A01,
+    parameter logic [15:0] HOST_PORT     = 16'd26401,
+    parameter logic        FILTER_EN     = 1'b1,
+    parameter logic [15:0] LOCATE        = 16'd1,
+    parameter logic [31:0] BASE_PRICE    = 32'd1_000_000,
     parameter int          RX_DELAY_TAPS = 30
 ) (
-    input logic sys_clk,
-    input logic cpu_reset_n,
+    input wire logic sys_clk,
+    input wire logic cpu_reset_n,
 
-    input logic       phy_rxclk,
-    input logic [7:0] phy_rxd,
-    input logic       phy_rxdv,
-    input logic       phy_rxer,
+    input wire logic       phy_rxclk,
+    input wire logic [7:0] phy_rxd,
+    input wire logic       phy_rxdv,
+    input wire logic       phy_rxer,
 
     output logic       phy_gtxclk,
     output logic [7:0] phy_txd,

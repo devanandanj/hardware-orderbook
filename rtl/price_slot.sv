@@ -11,11 +11,11 @@
 `default_nettype none
 
 module price_slot (
-    input  logic                    clk,
+    input wire logic clk,
 
-    input  logic [31:0]             base_price,
-    input  logic                    req_valid,
-    input  logic [31:0]             req_price,
+    input wire logic [31:0] base_price,
+    input wire logic        req_valid,
+    input wire logic [31:0] req_price,
 
     output logic                    rsp_valid,
     output logic                    rsp_ok,

@@ -13,25 +13,25 @@
 module price_book #(
     parameter bit SELL = 0
 ) (
-    input  logic                    clk,
-    input  logic                    rst,
-    output logic                    ready,
+    input  wire logic clk,
+    input  wire logic rst,
+    output logic      ready,
 
-    input  logic                    rd_valid,
-    input  logic [`BOOK_SLOT_W-1:0] rd_slot,
-    output logic                    rd_rsp_valid,
-    output logic [31:0]             rd_shares,
-    output logic [15:0]             rd_orders,
+    input  wire logic                    rd_valid,
+    input  wire logic [`BOOK_SLOT_W-1:0] rd_slot,
+    output logic                         rd_rsp_valid,
+    output logic      [            31:0] rd_shares,
+    output logic      [            15:0] rd_orders,
 
-    input  logic                    wr_valid,
-    input  logic [`BOOK_SLOT_W-1:0] wr_slot,
-    input  logic [31:0]             wr_shares,
-    input  logic [15:0]             wr_orders,
+    input wire logic                    wr_valid,
+    input wire logic [`BOOK_SLOT_W-1:0] wr_slot,
+    input wire logic [            31:0] wr_shares,
+    input wire logic [            15:0] wr_orders,
 
     output logic                    best_valid,
     output logic [`BOOK_SLOT_W-1:0] best_slot,
-    output logic [31:0]             best_shares,
-    output logic [15:0]             best_orders
+    output logic [            31:0] best_shares,
+    output logic [            15:0] best_orders
 );
 
     localparam int SLOT_W  = `BOOK_SLOT_W;

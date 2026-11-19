@@ -11,18 +11,18 @@
 `default_nettype none
 
 module book (
-    input logic        clk,
-    input logic        rst,
-    input logic [31:0] base_price,
+    input wire logic        clk,
+    input wire logic        rst,
+    input wire logic [31:0] base_price,
 
-    output logic        cmd_ready,
-    input  logic        cmd_valid,
-    input  logic [ 7:0] cmd_type,
-    input  logic        cmd_side,
-    input  logic [63:0] cmd_orn,
-    input  logic [63:0] cmd_new_orn,
-    input  logic [31:0] cmd_shares,
-    input  logic [31:0] cmd_price,
+    output logic             cmd_ready,
+    input  wire logic        cmd_valid,
+    input  wire logic [ 7:0] cmd_type,
+    input  wire logic        cmd_side,
+    input  wire logic [63:0] cmd_orn,
+    input  wire logic [63:0] cmd_new_orn,
+    input  wire logic [31:0] cmd_shares,
+    input  wire logic [31:0] cmd_price,
 
     output logic done,
     output logic order_dropped,

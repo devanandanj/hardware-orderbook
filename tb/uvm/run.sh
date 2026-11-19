@@ -19,15 +19,8 @@ mkdir -p build && cd build
 ${CXX:-g++} -std=c++20 -O2 -shared -fPIC -o golden_api.so \
     "$ROOT"/golden/src/{golden_api,book,command,itchparser,ordertable,pricebook}.cpp
 
-# xsim, unlike Verilator and Yosys, reads IEEE strictly: `input logic` under
-# `default_nettype none` has no net type.
-mkdir -p rtl
-for f in "$ROOT"/rtl/{book_pkg,book,order_table,price_slot,price_book}.sv; do
-    sed 's/`default_nettype none/`default_nettype wire/' "$f" > "rtl/${f##*/}"
-done
-
-xvlog -sv -L uvm -i rtl -i "$ROOT/spec/generated" -i .. \
-    rtl/{book,order_table,price_slot,price_book}.sv \
+xvlog -sv -L uvm -i "$ROOT/rtl" -i "$ROOT/spec/generated" -i .. \
+    "$ROOT"/rtl/{book,order_table,price_slot,price_book}.sv \
     ../book_if.sv ../book_wr_if.sv ../book_tb_pkg.sv ../tb_top.sv
 xelab -L uvm -sv_root . -sv_lib golden_api -timescale 1ns/1ps tb_top -s tb_top_snap --debug off
 

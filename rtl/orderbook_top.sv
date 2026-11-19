@@ -21,13 +21,13 @@ module orderbook_top #(
     parameter logic [15:0] LOCATE     = 16'd1,
     parameter logic [31:0] BASE_PRICE = 32'd1_000_000
 ) (
-    input logic gmii_rx_clk,
-    input logic gtx_clk,
-    input logic rst_async,
+    input wire logic gmii_rx_clk,
+    input wire logic gtx_clk,
+    input wire logic rst_async,
 
-    input logic [7:0] gmii_rxd,
-    input logic       gmii_rx_dv,
-    input logic       gmii_rx_er,
+    input wire logic [7:0] gmii_rxd,
+    input wire logic       gmii_rx_dv,
+    input wire logic       gmii_rx_er,
 
     output logic [7:0] gmii_txd,
     output logic       gmii_tx_en,

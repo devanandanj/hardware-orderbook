@@ -11,48 +11,48 @@
 `default_nettype none
 
 module egress (
-    input logic clk,
-    input logic rst,
+    input wire logic clk,
+    input wire logic rst,
 
-    input logic [31:0] base_price,
-    input logic [31:0] cycle,
+    input wire logic [31:0] base_price,
+    input wire logic [31:0] cycle,
 
-    input logic        cmd_accept,
-    input logic [63:0] cmd_mold_seq,
-    input logic [31:0] cmd_msg_index,
-    input logic [31:0] cmd_t_arrive,
+    input wire logic        cmd_accept,
+    input wire logic [63:0] cmd_mold_seq,
+    input wire logic [31:0] cmd_msg_index,
+    input wire logic [31:0] cmd_t_arrive,
 
-    input logic done,
-    input logic order_dropped,
-    input logic price_rejected,
-    input logic unknown_order_ref,
-    input logic mold_gap_seen,
+    input wire logic done,
+    input wire logic order_dropped,
+    input wire logic price_rejected,
+    input wire logic unknown_order_ref,
+    input wire logic mold_gap_seen,
 
-    input logic                    bid_valid,
-    input logic [`BOOK_SLOT_W-1:0] bid_slot,
-    input logic [            31:0] bid_shares,
-    input logic [            15:0] bid_orders,
-    input logic                    ask_valid,
-    input logic [`BOOK_SLOT_W-1:0] ask_slot,
-    input logic [            31:0] ask_shares,
-    input logic [            15:0] ask_orders,
+    input wire logic                    bid_valid,
+    input wire logic [`BOOK_SLOT_W-1:0] bid_slot,
+    input wire logic [            31:0] bid_shares,
+    input wire logic [            15:0] bid_orders,
+    input wire logic                    ask_valid,
+    input wire logic [`BOOK_SLOT_W-1:0] ask_slot,
+    input wire logic [            31:0] ask_shares,
+    input wire logic [            15:0] ask_orders,
 
     output logic snap_overflow,
 
-    input logic tx_clk,
-    input logic tx_rst,
+    input wire logic tx_clk,
+    input wire logic tx_rst,
 
-    input logic [47:0] cfg_src_mac,
-    input logic [47:0] cfg_dst_mac,
-    input logic [31:0] cfg_src_ip,
-    input logic [31:0] cfg_dst_ip,
-    input logic [15:0] cfg_src_port,
-    input logic [15:0] cfg_dst_port,
+    input wire logic [47:0] cfg_src_mac,
+    input wire logic [47:0] cfg_dst_mac,
+    input wire logic [31:0] cfg_src_ip,
+    input wire logic [31:0] cfg_dst_ip,
+    input wire logic [15:0] cfg_src_port,
+    input wire logic [15:0] cfg_dst_port,
 
-    output logic [7:0] s_data,
-    output logic       s_valid,
-    output logic       s_last,
-    input  logic       s_ready
+    output logic      [7:0] s_data,
+    output logic            s_valid,
+    output logic            s_last,
+    input  wire logic       s_ready
 );
 
   localparam logic [31:0] TICK = `BOOK_PRICE_TICK;

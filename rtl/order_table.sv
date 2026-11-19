@@ -11,14 +11,14 @@
 `default_nettype none
 
 module order_table (
-    input  logic clk,
-    input  logic rst,
+    input wire logic clk,
+    input wire logic rst,
     output logic ready,
 
-    input  logic                    req_valid,
-    input  logic [            63:0] req_orn,
-    output logic                    rsp_valid,
-    output logic [`BOOK_HASH_W-1:0] rsp_set,
+    input  wire logic                    req_valid,
+    input  wire logic [            63:0] req_orn,
+    output logic                         rsp_valid,
+    output logic      [`BOOK_HASH_W-1:0] rsp_set,
 
     output logic                   rsp_hit,
     output logic                   rsp_hit_cam,
@@ -29,11 +29,11 @@ module order_table (
     output logic       rsp_free_cam,
     output logic [3:0] rsp_free_idx,
 
-    input logic                                wr_valid,
-    input logic                                wr_cam,
-    input logic             [`BOOK_HASH_W-1:0] wr_set,
-    input logic             [             3:0] wr_idx,
-    input book_pkg::entry_t                    wr_entry
+    input wire logic                                wr_valid,
+    input wire logic                                wr_cam,
+    input wire logic             [`BOOK_HASH_W-1:0] wr_set,
+    input wire logic             [             3:0] wr_idx,
+    input wire book_pkg::entry_t                    wr_entry
 );
 
   localparam int HASH_W  = `BOOK_HASH_W;

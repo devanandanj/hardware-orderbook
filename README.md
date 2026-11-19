@@ -18,8 +18,18 @@ levels per side. Host output is the best bid and offer, not full depth.
 
 ## Status
 
-This describes the v3 design. The spec and golden model implement it; the RTL
-is in progress.
+All blocks are written and pass against the golden model in simulation, end to
+end from GMII frames in to snapshot frames out. ISE closes timing at 125 MHz on
+the XUPV5. The design has not yet run on the board.
+
+A real trading day, SPY from the 2019-07-30 NASDAQ BX feed (260,752 messages),
+replays through the whole design in simulation with every snapshot matching
+golden byte for byte.
+
+- Book update in 10 to 18 cycles at 125 MHz (80 to 144 ns); arrival to commit
+  is at most 19 cycles.
+- 5,177 LUTs (7%), 4,921 registers, 66 of 148 block RAMs, 5 DSPs.
+- 1024 x 3-way order table plus a 16-entry CAM; 16,384 price levels per side.
 
 | Block | State |
 |---|---|
@@ -32,7 +42,7 @@ is in progress.
 | `rtl/egress.sv`, `rtl/async_fifo.sv` (snapshot egress) | Done, tested against golden's snapshot encoder in `tb/egress/` across unrelated clock ratios and a full FIFO |
 | `rtl/orderbook_top.sv` (full system) | Done, `eth_stack` to ingress to book to egress; tested end to end in `tb/top/` against golden, GMII frames in and out |
 | `rtl/xupv5_top.sv`, `synth/xupv5.ucf` (board) | Builds in ISE, never run on the board: PLL, PHY reset, GMII I/O registers, status LEDs. Pins from the ML505/XUPV5 schematic |
-| Synthesis | ISE 14.7 meets every constraint at 125 MHz (7.965 ns, so only 35 ps of slack); 5,182 LUTs, 4,920 registers, 65 block RAMs, 5 DSPs. Generated Verilog tested in simulation; `make -C synth timing` runs ISE through place and route and timing at standard effort; `make -C synth bit` reruns it at high effort and writes the bitstream |
+| Synthesis | ISE 14.7 meets every constraint at 125 MHz (7.956 ns, so only 44 ps of slack), GMII TX outputs included; 5,177 LUTs, 4,921 registers, 66 block RAMs, 5 DSPs. Generated Verilog tested in simulation; `make -C synth timing` runs ISE through place and route and timing at standard effort; `make -C synth bit` reruns it at high effort and writes the bitstream |
 | `formal/` | Proves the book FSM's control properties at a small geometry |
 | `tb/uvm/` | Written for the v2 core, which is removed; needs porting to v3 |
 
@@ -45,6 +55,7 @@ spec/        wire-format single source of truth + code generator
   generated/   DO NOT EDIT -- regenerate with `python spec/gen.py`
 rtl/         SystemVerilog RTL
 synth/       SystemVerilog to Verilog conversion for ISE
+host/        board sender and snapshot receiver/checker
 tb/order_table/, tb/price_slot/, tb/price_book/, tb/book/, tb/ingress/, tb/egress/
              Verilator tests of each block against the golden model
 tb/top/      Verilator test of the whole design, GMII in to GMII out, against golden
@@ -62,8 +73,33 @@ after a plain clone) to fetch them.
 
 Python tooling needs `pip install -r requirements.txt`.
 
-The host stimulus/listener tooling (`../moldudp-scapy`) is not yet linked
-in as a submodule; do so when it stabilises.
+
+## On the board
+
+`host/send.py` replays a `.mold` file to the board, one MoldUDP64 packet per
+datagram. `host/recv.py` collects the snapshots, checks magic, version and
+`snap_seq` continuity, prints the `t_commit - t_arrive` histogram, and with
+`--golden` diffs every snapshot against the golden model's, timestamps masked.
+Standard library only; `python3 host/test_host.py` checks both over loopback.
+
+The board answers no ARP and sends to a fixed MAC, so build it for the host's
+NIC and the symbol, and give the host a static neighbour entry once:
+
+```bash
+make -C synth bit HOST_MAC=60cf84d09505 LOCATE=7397 BASE=3000000
+sudo ip addr add 192.168.10.1/24 dev eth0
+sudo ip neigh add 192.168.10.2 lladdr 02:00:00:00:00:01 dev eth0
+```
+
+Press CPU_RESET before each run so `snap_seq` starts at 0, then:
+
+```bash
+python3 host/recv.py --golden SPY.snapshot.bin    # first, in its own terminal
+python3 host/send.py SPY.mold
+```
+
+`recv.py` reports host-side socket drops separately from gaps in `snap_seq`;
+if it reports any, raise `net.core.rmem_max` or pass `--pps` to `send.py`.
 
 ## spec/ is the contract
 
@@ -149,4 +185,4 @@ latency budget, memory access rules, status) at a small geometry -- see
 
 ## License
 
-MIT
+BSD 3-Clause, see LICENSE.

@@ -106,7 +106,7 @@ module book (
   );
 
   logic [HASH_W-1:0] lk_set;
-  logic lk_hit_cam, lk_free, lk_free_cam;
+  logic lk_hit_cam, lk_free, lk_free_cam, full_remove;
   logic [3:0] lk_hit_idx, lk_free_idx;
   book_pkg::entry_t lk_entry;
 
@@ -116,6 +116,7 @@ module book (
       lk_hit_cam  <= ot_rsp_hit_cam;
       lk_hit_idx  <= ot_rsp_hit_idx;
       lk_entry    <= ot_rsp_hit_entry;
+      full_remove <= c_type == "D" || c_type == "U" || c_shares >= ot_rsp_hit_entry.shares;
       lk_free     <= ot_rsp_free;
       lk_free_cam <= ot_rsp_free_cam;
       lk_free_idx <= ot_rsp_free_idx;
@@ -204,7 +205,6 @@ module book (
   wire [31:0] lvl_shares = lw_side ? ask_rd_shares : bid_rd_shares;
   wire [15:0] lvl_orders = lw_side ? ask_rd_orders : bid_rd_orders;
 
-  wire        full_remove = c_type == "D" || c_type == "U" || c_shares >= lk_entry.shares;
   wire        rem_ready = lk_entry.side ? ask_ready : bid_ready;
   wire        ins_ready = c_side ? ask_ready : bid_ready;
   wire        ins_go = state == S_INS && !ps_pending && sl_ok && lk_free && ins_ready;

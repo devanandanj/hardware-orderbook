@@ -52,3 +52,9 @@ NET "phy_rxd<*>" TNM = "gmii_in";
 NET "phy_rxdv"   TNM = "gmii_in";
 NET "phy_rxer"   TNM = "gmii_in";
 TIMEGRP "gmii_in" OFFSET = IN 2.5 ns VALID 3.0 ns BEFORE "phy_rxclk" RISING;
+
+NET "phy_txd<*>" TNM = "gmii_out";
+NET "phy_txen"   TNM = "gmii_out";
+NET "phy_txer"   TNM = "gmii_out";
+# phy_gtxclk rises half a cycle after this launch edge, about 12.4 ns; the 88E1111 needs 2 ns setup
+TIMEGRP "gmii_out" OFFSET = OUT 10 ns AFTER "sys_clk";

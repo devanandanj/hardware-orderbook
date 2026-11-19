@@ -29,6 +29,9 @@ jobs:
       - name: Spec self-tests
         run: python spec/test_spec.py
 
+      - name: Host tools loopback
+        run: python host/test_host.py
+
   formal:
     name: SymbiYosys book properties
     runs-on: ubuntu-latest

@@ -4,6 +4,8 @@
 #
 #   make          convert into build/
 #   make check    convert, then rerun the block tests on the generated Verilog
+#   make bit HOST_MAC=60cf84d09505 LOCATE=7397 BASE=3000000
+#                 board build for a host NIC and symbol; unset ones keep xupv5_top's defaults
 #
 # Needs sv2v and, for check, iverilog and verilator.
 
@@ -14,6 +16,7 @@ ETH    := $(wildcard $(ROOT)/ethernet/rtl/*.sv)
 BOARD  := $(ROOT)/rtl/xupv5_top.sv
 PART   := xc5vlx110t-ff1136-1
 EFFORT ?= std
+GENERICS := $(strip $(if $(HOST_MAC),HOST_MAC=48'h$(HOST_MAC)) $(if $(LOCATE),LOCATE=$(LOCATE)) $(if $(BASE),BASE_PRICE=$(BASE)))
 INC    := $(ROOT)/rtl/book_pkg.sv $(ROOT)/spec/generated/itch_defs.vh
 
 .PHONY: all check timing bit clean
@@ -49,10 +52,10 @@ check: all
 timing: all
 	mkdir -p build/ise
 	cd build/ise && ls $(CURDIR)/build/*.v $(CURDIR)/build/board/*.v | sed 's/^/verilog work /' > top.prj
-	cd build/ise && echo "run -ifn top.prj -ifmt mixed -top xupv5_top -p $(PART) -ofn xupv5_top.ngc -opt_mode speed" > top.xst
+	cd build/ise && echo "run -ifn top.prj -ifmt mixed -top xupv5_top -p $(PART) -ofn xupv5_top.ngc -opt_mode speed $(if $(GENERICS),-generics {$(GENERICS)})" > top.xst
 	cd build/ise && xst -ifn top.xst
 	cd build/ise && ngdbuild -uc $(CURDIR)/xupv5.ucf -p $(PART) xupv5_top.ngc
-	cd build/ise && map -p $(PART) -pr b -ol $(EFFORT) -o map.ncd xupv5_top.ngd
+	cd build/ise && map -w -p $(PART) -pr b -ol $(EFFORT) -o map.ncd xupv5_top.ngd
 	cd build/ise && par -w -ol $(EFFORT) map.ncd par.ncd
 	cd build/ise && trce -v 10 -u 10 par.ncd map.pcf -o timing.twr
 

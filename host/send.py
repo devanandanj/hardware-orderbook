@@ -43,7 +43,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("mold", type=Path)
     ap.add_argument("--board", type=addr, default=("192.168.10.2", 26400), help="ip:port")
-    ap.add_argument("--pps", type=float, default=50000,
+    ap.add_argument("--pps", type=float, default=15000,
                     help="packets per second, 0 for as fast as possible; the board sends one "
                          "114-cycle snapshot frame per message, so line rate overflows it")
     ap.add_argument("--count", type=int, help="stop after this many packets")

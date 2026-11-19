@@ -98,10 +98,11 @@ python3 host/recv.py --golden SPY.snapshot.bin    # first, in its own terminal
 python3 host/send.py SPY.mold
 ```
 
-`send.py` paces itself to 50,000 packets a second by default. Each snapshot
-takes 114 cycles on the wire, while a full-rate feed delivers a message about
-every 32, so an unpaced replay overflows the snapshot FIFO (`snap_seq` gaps and
-the `snap_overflow` LED). `recv.py` reports host-side socket drops separately;
+`send.py` paces itself to 15,000 packets a second by default. Each snapshot
+takes 114 cycles (912 ns) on the wire, so a packet of up to 60 messages needs
+about 55 us to drain, while a full-rate feed delivers a message about every 32
+cycles. Faster than about 18,000 packets a second overflows the snapshot FIFO
+(`snap_seq` gaps and the `snap_overflow` LED). `recv.py` reports host-side socket drops separately;
 if it reports any, raise `net.core.rmem_max` or lower `--pps`.
 
 ## spec/ is the contract

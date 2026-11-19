@@ -98,8 +98,11 @@ python3 host/recv.py --golden SPY.snapshot.bin    # first, in its own terminal
 python3 host/send.py SPY.mold
 ```
 
-`recv.py` reports host-side socket drops separately from gaps in `snap_seq`;
-if it reports any, raise `net.core.rmem_max` or pass `--pps` to `send.py`.
+`send.py` paces itself to 50,000 packets a second by default. Each snapshot
+takes 114 cycles on the wire, while a full-rate feed delivers a message about
+every 32, so an unpaced replay overflows the snapshot FIFO (`snap_seq` gaps and
+the `snap_overflow` LED). `recv.py` reports host-side socket drops separately;
+if it reports any, raise `net.core.rmem_max` or lower `--pps`.
 
 ## spec/ is the contract
 
